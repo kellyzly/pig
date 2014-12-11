@@ -1675,7 +1675,7 @@
      </target>
 
      <target name="ivy-download" description="To download ivy" unless="offline">
-        <setproxy proxyhost="child-prc.intel.com" proxyport="913"/>
+        <setproxy proxyhost="proxy-ir.intel.com" proxyport="911"/>
         <get src="${ivy_repo_url}" dest="${ivy.jar}" usetimestamp="true"/>
      </target>
 
