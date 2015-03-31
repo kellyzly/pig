@@ -28,6 +28,7 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.Physica
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.LitePackager;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLocalRearrange;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POPackage;
+import org.apache.pig.backend.hadoop.executionengine.spark.operator.POLocalRearrangeSpark;
 import org.apache.pig.impl.plan.DepthFirstWalker;
 import org.apache.pig.impl.plan.VisitorException;
 import org.apache.pig.impl.plan.optimizer.OptimizerException;
@@ -81,7 +82,7 @@ public class SparkPOPackageAnnotator extends SparkOpPlanVisitor {
 	private int patchPackage(SparkOperator pred, SparkOperator pkgSparkOp,
 			POPackage pkg) throws VisitorException {
 		LoRearrangeDiscoverer lrDiscoverer = new LoRearrangeDiscoverer(
-				pred.physicalPlan, pkg);
+				pred.physicalPlan,pkgSparkOp, pkg);
 		lrDiscoverer.visit();
 		// let our caller know if we managed to patch
 		// the package
@@ -115,17 +116,25 @@ public class SparkPOPackageAnnotator extends SparkOpPlanVisitor {
 
 		private int loRearrangeFound = 0;
 		private POPackage pkg;
+        private SparkOperator pkgSparkOp;
 
-		public LoRearrangeDiscoverer(PhysicalPlan plan, POPackage pkg) {
+		public LoRearrangeDiscoverer(PhysicalPlan plan,SparkOperator
+                pkgSparkOp,
+                POPackage pkg) {
 			super(plan, new DepthFirstWalker<PhysicalOperator, PhysicalPlan>(
 					plan));
 			this.pkg = pkg;
+            this.pkgSparkOp = pkgSparkOp;
 		}
 
 		@Override
 		public void visitLocalRearrange(POLocalRearrange lrearrange)
 				throws VisitorException {
-			loRearrangeFound++;
+            POLocalRearrangeSpark lrSpark = (POLocalRearrangeSpark)lrearrange;
+            if (!(lrSpark.isConnectedToPackage() && lrSpark.getOutputKey().equals(pkgSparkOp.getOperatorKey().toString()))) {
+                return;
+            }
+            loRearrangeFound++;
 			Map<Integer, Pair<Boolean, Map<Integer, Integer>>> keyInfo;
 
 			if (pkg.getPkgr() instanceof LitePackager) {

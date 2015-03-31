@@ -47,6 +47,7 @@ import org.apache.pig.PigConstants;
 import org.apache.pig.PigException;
 import org.apache.pig.backend.BackendException;
 import org.apache.pig.backend.hadoop.executionengine.Launcher;
+import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PhyPlanSetter;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhysicalPlan;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POCollectedGroup;
@@ -57,9 +58,9 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOpe
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POGlobalRearrange;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLimit;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLoad;
-import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLocalRearrange;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POPackage;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.PORank;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POReservoirSample;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POSkewedJoin;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POSort;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POSplit;
@@ -78,12 +79,14 @@ import org.apache.pig.backend.hadoop.executionengine.spark.converter.LocalRearra
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.POConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.PackageConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.RankConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.ReservoirSampleConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.SkewedJoinConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.SortConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.SplitConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.StoreConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.StreamConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.UnionConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.operator.POLocalRearrangeSpark;
 import org.apache.pig.backend.hadoop.executionengine.spark.operator.POStreamSpark;
 import org.apache.pig.backend.hadoop.executionengine.spark.optimizer.AccumulatorOptimizer;
 import org.apache.pig.backend.hadoop.executionengine.spark.plan.SparkCompiler;
@@ -191,7 +194,7 @@ public class SparkLauncher extends Launcher {
 		convertMap.put(POFilter.class, new FilterConverter());
 		convertMap.put(POPackage.class, new PackageConverter(confBytes));
 		// convertMap.put(POCache.class, cacheConverter);
-		convertMap.put(POLocalRearrange.class, new LocalRearrangeConverter());
+		convertMap.put(POLocalRearrangeSpark.class, new LocalRearrangeConverter());
 		convertMap.put(POGlobalRearrange.class, new GlobalRearrangeConverter());
 		convertMap.put(POLimit.class, new LimitConverter());
 		convertMap.put(PODistinct.class, new DistinctConverter());
@@ -203,8 +206,8 @@ public class SparkLauncher extends Launcher {
 		convertMap.put(POCounter.class, new CounterConverter());
 		convertMap.put(PORank.class, new RankConverter());
 		convertMap.put(POStreamSpark.class, new StreamConverter(confBytes));
-
-		sparkPlanToRDD(sparkplan, convertMap, sparkStats, jobConf);
+        convertMap.put(POReservoirSample.class, new ReservoirSampleConverter(confBytes));
+        sparkPlanToRDD(sparkplan, convertMap, sparkStats, jobConf);
 
 		cleanUpSparkJob(pigContext, currentDirectoryPath);
 		sparkStats.finish();
@@ -402,6 +405,7 @@ public class SparkLauncher extends Launcher {
 		sparkCompiler.compile();
 		SparkOperPlan sparkPlan = sparkCompiler.getSparkPlan();
 
+
 		// optimize key - value handling in package
 		SparkPOPackageAnnotator pkgAnnotator = new SparkPOPackageAnnotator(
 				sparkPlan);
@@ -542,7 +546,8 @@ public class SparkLauncher extends Launcher {
 		} else {
 			PhysicalOperator leafPO = leafPOs.get(0);
 			try {
-				physicalToRDD(sparkOperator.physicalPlan, leafPO, physicalOpRdds,
+                new PhyPlanSetter(sparkOperator.physicalPlan).visit();
+                physicalToRDD(sparkOperator.physicalPlan, leafPO, physicalOpRdds,
 						predecessorRDDs, convertMap);
 				sparkOpRdds.put(sparkOperator.getOperatorKey(),
 						physicalOpRdds.get(leafPO.getOperatorKey()));
@@ -585,6 +590,7 @@ public class SparkLauncher extends Launcher {
 			List<RDD<Tuple>> rddsFromPredeSparkOper,
 			Map<Class<? extends PhysicalOperator>, POConverter> convertMap)
 			throws IOException {
+
 		RDD<Tuple> nextRDD = null;
 		List<PhysicalOperator> predecessors = plan
 				.getPredecessors(physicalOperator);
