@@ -1,0 +1,801 @@
+2015.3.4
+testlimit.pig
+a = load './testlimit.txt' as (x:int, y:chararray);
+b = order a by x;
+c = limit b 1;
+store c into './testlimit.out';
+explain c;
+
+#-----------------------------------------------
+# Physical Plan:
+#-----------------------------------------------
+c: Store(fakefile:org.apache.pig.builtin.PigStorage) - scope-10
+|
+|---b: POSort[bag]() - scope-9
+    |   |
+    |   Project[int][0] - scope-8
+    |
+    |---a: New For Each(false,false)[bag] - scope-7
+        |   |
+        |   Cast[int] - scope-2
+        |   |
+        |   |---Project[bytearray][0] - scope-1
+        |   |
+        |   Cast[chararray] - scope-5
+        |   |
+        |   |---Project[bytearray][1] - scope-4
+        |
+        |---a: Load(hdfs://liyunzhangcentos.sh.intel.com:8020/user/root/testlimit.txt:org.apache.pig.builtin.PigStorage) - scope-0
+
+Listening for transport dt_socket at address: 9999
+#--------------------------------------------------
+# There are 1 DAGs in the session
+#--------------------------------------------------
+#--------------------------------------------------
+# TEZ DAG plan: PigLatin:testlimit.pig-0_scope-0
+#--------------------------------------------------
+Tez vertex scope-11	->	Tez vertex scope-20,Tez vertex scope-30,
+Tez vertex scope-20	->	Tez vertex scope-30,
+Tez vertex scope-30	->	Tez vertex scope-32,
+Tez vertex scope-32	->	Tez vertex scope-43,
+Tez vertex scope-43
+
+Tez vertex scope-11
+# Plan on vertex
+Local Rearrange[tuple]{tuple}(false) - scope-14	->	 scope-20
+|   |
+|   Constant(DummyVal) - scope-13
+|
+|---New For Each(false,true)[tuple] - scope-19
+    |   |
+    |   Project[int][0] - scope-8
+    |   |
+    |   POUserFunc(org.apache.pig.impl.builtin.GetMemNumRows)[tuple] - scope-18
+    |   |
+    |   |---Project[tuple][*] - scope-17
+    |
+    |---ReservoirSample - scope-16
+        |
+        |---b: Local Rearrange[tuple]{int}(false) - scope-12	->	 scope-30
+            |   |
+            |   Project[int][0] - scope-8
+            |
+            |---a: New For Each(false,false)[bag] - scope-7
+                |   |
+                |   Cast[int] - scope-2
+                |   |
+                |   |---Project[bytearray][0] - scope-1
+                |   |
+                |   Cast[chararray] - scope-5
+                |   |
+                |   |---Project[bytearray][1] - scope-4
+                |
+                |---a: Load(hdfs://liyunzhangcentos.sh.intel.com:8020/user/root/testlimit.txt:org.apache.pig.builtin.PigStorage) - scope-0
+Tez vertex scope-20
+# Plan on vertex
+POValueOutputTez - scope-29	->	 [scope-30]
+|
+|---New For Each(false)[tuple] - scope-28
+    |   |
+    |   POUserFunc(org.apache.pig.backend.hadoop.executionengine.tez.plan.udf.)[tuple] - scope-27
+    |   |
+    |   |---Project[tuple][*] - scope-26
+    |
+    |---New For Each(false,false)[tuple] - scope-25
+        |   |
+        |   Constant(-1) - scope-24
+        |   |
+        |   Project[bag][1] - scope-22
+        |
+        |---Package(Packager)[tuple]{bytearray} - scope-21
+Tez vertex scope-30
+# Plan on vertex
+POIdentityInOutTez - scope-31	<-	 scope-11	->	 scope-32
+|   |
+|   Project[int][0] - scope-8
+Tez vertex scope-32
+# Plan on vertex
+POValueOutputTez - scope-42	->	 [scope-43]
+|
+|---Limit - scope-41
+    |
+    |---New For Each(true)[tuple] - scope-40
+        |   |
+        |   Project[bag][1] - scope-39
+        |
+        |---Package(LitePackager)[tuple]{int} - scope-38
+Tez vertex scope-43
+# Plan on vertex
+c: Store(fakefile:org.apache.pig.builtin.PigStorage) - scope-10
+|
+|---Limit - scope-45
+    |
+    |---POValueInputTez - scope-44	<-	 scope-32
+
+  problem existed:
+  1.org.apache.pig.impl.builtin.GetMemNumRows  function?
+  2. ReservoirSample function?
+  3. org.apache.pig.backend.hadoop.executionengine.tez.plan.udf
+  .FindQuantilesTez function?
+  4.POIdentityInOutTez   function?
+  5. POValueOutputTez function?
+
+
+  2015.3.5
+ #--------------------------------------------------
+ # Map Reduce Plan
+ #--------------------------------------------------
+ MapReduce node scope-11
+ Map Plan
+ Store(hdfs://zly1.sh.intel.com:8020/tmp/temp2146669591/tmp694083214:org.apache.pig.impl.io.InterStorage) - scope-12
+ |
+ |---a: New For Each(false,false)[bag] - scope-7
+     |   |
+     |   Cast[int] - scope-2
+     |   |
+     |   |---Project[bytearray][0] - scope-1
+     |   |
+     |   Cast[chararray] - scope-5
+     |   |
+     |   |---Project[bytearray][1] - scope-4
+     |
+     |---a: Load(hdfs://zly1.sh.intel.com:8020/user/root/testlimit.txt:org.apache.pig.builtin.PigStorage) - scope-0--------
+ Global sort: false
+ ----------------
+
+   /**
+       * Create a sampling job to collect statistics by sampling an input file. The sequence of operations is as
+       * following:
+       * <li>Transform input sample tuples into another tuple.</li>
+       * <li>Add an extra field &quot;all&quot; into the tuple </li>
+       * <li>Package all tuples into one bag </li>
+       * <li>Add constant field for number of reducers. </li>
+       * <li>Sorting the bag </li>
+       * <li>Invoke UDF with the number of reducers and the sorted bag.</li>
+       * <li>Data generated by UDF is stored into a file.</li>
+    **/
+ MapReduce node scope-14
+ Map Plan
+ b: Local Rearrange[tuple]{tuple}(false) - scope-18
+ |   |
+ |   Constant(all) - scope-17
+ |
+ |---New For Each(false)[tuple] - scope-16
+     |   |
+     |   Project[int][0] - scope-15
+     |
+     |---Load(hdfs://zly1.sh.intel.com:8020/tmp/temp2146669591/tmp694083214:org.apache.pig.impl.builtin.RandomSampleLoader('org.apache.pig.impl.io.InterStorage','100')) - scope-13--------
+ Reduce Plan
+ Store(hdfs://zly1.sh.intel.com:8020/tmp/temp2146669591/tmp300898425:org.apache.pig.impl.io.InterStorage) - scope-27
+ |
+ |---New For Each(false)[tuple] - scope-26
+     |   |
+     |   POUserFunc(org.apache.pig.impl.builtin.FindQuantiles)[tuple] - scope-25
+     |   |
+     |   |---Project[tuple][*] - scope-24
+     |
+     |---New For Each(false,false)[tuple] - scope-23
+         |   |
+         |   Constant(2) - scope-22
+         |   |
+         |   Project[bag][1] - scope-20
+         |
+         |---Package(Packager)[tuple]{chararray} - scope-19--------
+ Global sort: false
+ Secondary sort: true
+ ----------------
+
+
+       Sort job
+ MapReduce node scope-29
+ Map Plan
+ b: Local Rearrange[tuple]{int}(false) - scope-30
+ |   |
+ |   Project[int][0] - scope-8
+ |
+ |---Load(hdfs://zly1.sh.intel.com:8020/tmp/temp2146669591/tmp694083214:org.apache.pig.impl.io.InterStorage) - scope-28--------
+ Combine Plan
+ Local Rearrange[tuple]{int}(false) - scope-35
+ |   |
+ |   Project[int][0] - scope-8
+ |
+ |---Limit - scope-34
+     |
+     |---New For Each(true)[tuple] - scope-33
+         |   |
+         |   Project[bag][1] - scope-32
+         |
+         |---Package(LitePackager)[tuple]{int} - scope-31--------
+ Reduce Plan
+ c: Store(hdfs://zly1.sh.intel.com:8020/tmp/temp2146669591/tmp538566422:org.apache.pig.impl.io.InterStorage) - scope-10
+ |
+ |---Limit - scope-39
+     |
+     |---New For Each(true)[tuple] - scope-38
+         |   |
+         |   Project[bag][1] - scope-37
+         |
+         |---Package(LitePackager)[tuple]{int} - scope-36--------
+ Global sort: true
+ Quantile file: hdfs://zly1.sh.intel.com:8020/tmp/temp2146669591/tmp300898425
+ ----------------
+          after  org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MapReduceLauncher.compile
+
+          Line 657  LimitAdjuster la = new LimitAdjuster(plan, pc);
+                      la.visit();
+          original 3 mr operators becomes 4 mr operators
+
+ MapReduce node scope-40
+ Map Plan
+ b: Local Rearrange[tuple]{int}(false) - scope-42
+ |   |
+ |   Project[int][0] - scope-43
+ |
+ |---Load(hdfs://zly1.sh.intel.com:8020/tmp/temp2146669591/tmp538566422:org.apache.pig.impl.io.InterStorage) - scope-41--------
+ Reduce Plan
+ c: Store(fakefile:org.apache.pig.builtin.PigStorage) - scope-49
+ |
+ |---Limit - scope-48
+     |
+     |---New For Each(true)[bag] - scope-47
+         |   |
+         |   Project[tuple][1] - scope-46
+         |
+         |---Package(LitePackager)[tuple]{int} - scope-45--------
+ Global sort: false
+ ----------------
+
+  problems existed:
+  1.sparkOperator.combinePlan don't know whether needed?  if needed, how to
+  chaneg SparkCompiler#Line 1151~1194
+
+
+
+  2015.3.10
+  #--------------------------------------------------
+  # Spark Plan
+  #--------------------------------------------------
+
+  Spark node scope-11
+  Store(hdfs://liyunzhangcentos.sh.intel.com:8020/tmp/temp-240498138/tmp1248745367:org.apache.pig.impl.io.InterStorage) - scope-12
+  |
+  |---a: New For Each(false,false)[bag] - scope-7
+      |   |
+      |   Cast[int] - scope-2
+      |   |
+      |   |---Project[bytearray][0] - scope-1
+      |   |
+      |   Cast[chararray] - scope-5
+      |   |
+      |   |---Project[bytearray][1] - scope-4
+      |
+      |---a: Load(hdfs://liyunzhangcentos.sh.intel.com:8020/user/root/testlimit.txt:org.apache.pig.builtin.PigStorage) - scope-0--------
+
+  Spark node scope-14
+  b: Local Rearrange[tuple]{chararray}(false) - scope-18
+  |   |
+  |   Constant(all) - scope-17
+  |
+  |---New For Each(false)[tuple] - scope-16
+      |   |
+      |   Project[int][0] - scope-15
+      |
+      |---Load(hdfs://liyunzhangcentos.sh.intel.com:8020/tmp/temp-240498138/tmp1248745367:org.apache.pig.impl.builtin.RandomSampleLoader('org.apache.pig.impl.io.InterStorage','100')) - scope-13
+
+  Store(hdfs://liyunzhangcentos.sh.intel.com:8020/tmp/temp-240498138/tmp100858483:org.apache.pig.impl.io.InterStorage) - scope-27
+  |
+  |---New For Each(false)[tuple] - scope-26
+      |   |
+      |   POUserFunc(org.apache.pig.impl.builtin.FindQuantiles)[tuple] - scope-25
+      |   |
+      |   |---Project[tuple][*] - scope-24
+      |
+      |---New For Each(false,false)[tuple] - scope-23
+          |   |
+          |   Constant(-1) - scope-22
+          |   |
+          |   b: POSort[bag]() - scope-9
+          |   |   |
+          |   |   Project[int][0] - scope-21
+          |   |
+          |   |---Project[bag][1] - scope-20
+          |
+          |---Package(Packager)[tuple]{chararray} - scope-19--------
+
+  Spark node scope-29
+  c: Store(fakefile:org.apache.pig.builtin.PigStorage) - scope-10
+  |
+  |---Limit - scope-34
+      |
+      |---New For Each(true)[tuple] - scope-33
+          |   |
+          |   Project[bag][1] - scope-32
+          |
+          |---Package(LitePackager)[tuple]{int} - scope-31
+              |
+              |---b: Local Rearrange[tuple]{int}(false) - scope-30
+                  |   |
+                  |   Project[int][0] - scope-8
+                  |
+                  |---Load(hdfs://liyunzhangcentos.sh.intel.com:8020/tmp/temp-240498138/tmp1248745367:org.apache.pig.impl.io.InterStorage) - scope-28--------
+
+
+
+ 2015.3.13
+   32 Caused by: org.apache.pig.impl.plan.optimizer.OptimizerException: ERROR 2086: Unexpected problem during optimization. Could not find all LocalRearrange operators.
+     33         at org.apache.pig.backend.hadoop.executionengine.spark.plan.SparkPOPackageAnnotator.handlePackage(SparkPOPackageAnnotator.java:77)
+     34         at org.apache.pig.backend.hadoop.executionengine.spark.plan.SparkPOPackageAnnotator.visitSparkOp(SparkPOPackageAnnotator.java:56)
+     35         at org.apache.pig.backend.hadoop.executionengine.spark.plan.SparkOperator.visit(SparkOperator.java:150)
+     36         at org.apache.pig.backend.hadoop.executionengine.spark.plan.SparkOperator.visit(SparkOperator.java:34)
+     37         at org.apache.pig.impl.plan.DepthFirstWalker.depthFirst(DepthFirstWalker.java:69)
+     38         at org.apache.pig.impl.plan.DepthFirstWalker.depthFirst(DepthFirstWalker.java:71)
+     39         at org.apache.pig.impl.plan.DepthFirstWalker.walk(DepthFirstWalker.java:52)
+     40         at org.apache.pig.impl.plan.PlanVisitor.visit(PlanVisitor.java:46)
+     41         at org.apache.pig.backend.hadoop.executionengine.spark.SparkLauncher.compile(SparkLauncher.java:398)
+     42         at org.apache.pig.backend.hadoop.executionengine.spark.SparkLauncher.explain(SparkLauncher.java:600)
+     43         at org.apache.pig.backend.hadoop.executionengine.HExecutionEngine.explain(HExecutionEngine.java:337)
+     44         at org.apache.pig.PigServer.explain(PigServer.java:1098)
+     45         ... 15 more
+
+   problem existed:
+   1. Combine plan function?    TezEdgeDescriptor's function is edgeDesc
+   .combinePlan
+   2. POValueOutputTez, POValueInputTez 's function is what?
+
+   /**
+    * POValueInputTez is used read tuples from a Tez Intermediate output from a 1-1
+    * edge
+    */
+
+    POIdentityInOutTez' s function is what?
+    /**
+     * POIdentityInOutTez is used to pass through tuples as is to next vertex from
+     * previous vertex's POLocalRearrangeTez. For eg: In case of Order By, the
+     * partition vertex which just applies the WeightedRangePartitioner on the
+     * previous vertex data uses POIdentityInOutTez.
+     */
+   3.
+   # TEZ DAG plan: PigLatin:testlimit.pig-0_scope-0
+   #--------------------------------------------------
+   Tez vertex scope-11	->	Tez vertex scope-20,Tez vertex scope-30,
+   Tez vertex scope-20	->	Tez vertex scope-30,
+   Tez vertex scope-30	->	Tez vertex scope-32,
+   Tez vertex scope-32	->	Tez vertex scope-43,
+   Tez vertex scope-43
+
+   11 and 20 is to 30, 30 can get these two inputs?
+
+   Tez vertex scope-30
+   # Plan on vertex
+   POIdentityInOutTez - scope-31	<-	 scope-11	->	 scope-32
+   |   |
+   |   Project[int][0] - scope-8
+
+
+
+   [main] 2015-03-16
+
+
+
+
+
+  265 Caused by: org.apache.spark.SparkException: Job aborted due to stage failure: Task 0 in stage 0.0 failed 1 times, most recent failure: Lost task 0.0 in stage 0.0 (TID 0, localhost): java.lang.ClassCastException: java.lang.Byte cannot     be cast to java.util.Iterator
+  266         at org.apache.pig.backend.hadoop.executionengine.spark.converter.PackageConverter$PackageFunction.apply(PackageConverter.java:85)
+  267         at org.apache.pig.backend.hadoop.executionengine.spark.converter.PackageConverter$PackageFunction.apply(PackageConverter.java:48)
+  268         at scala.collection.Iterator$$anon$11.next(Iterator.scala:328)
+  269         at scala.collection.convert.Wrappers$IteratorWrapper.next(Wrappers.scala:30)
+  270         at org.apache.pig.backend.hadoop.executionengine.spark.converter.POOutputConsumerIterator.readNext(POOutputConsumerIterator.java:35)
+  271         at org.apache.pig.backend.hadoop.executionengine.spark.converter.POOutputConsumerIterator.hasNext(POOutputConsumerIterator.java:64)
+  272         at scala.collection.convert.Wrappers$JIteratorWrapper.hasNext(Wrappers.scala:41)
+  273         at scala.collection.Iterator$$anon$13.hasNext(Iterator.scala:371)
+  274         at scala.collection.convert.Wrappers$IteratorWrapper.hasNext(Wrappers.scala:29)
+  275         at org.apache.pig.backend.hadoop.executionengine.spark.converter.POOutputConsumerIterator.readNext(POOutputConsumerIterator.java:30)
+  276         at org.apache.pig.backend.hadoop.executionengine.spark.converter.POOutputConsumerIterator.hasNext(POOutputConsumerIterator.java:64)
+  277         at scala.collection.convert.Wrappers$JIteratorWrapper.hasNext(Wrappers.scala:41)
+  278         at scala.collection.Iterator$$anon$13.hasNext(Iterator.scala:371)
+  279         at scala.collection.convert.Wrappers$IteratorWrapper.hasNext(Wrappers.scala:29)
+  280         at org.apache.pig.backend.hadoop.executionengine.spark.converter.POOutputConsumerIterator.readNext(POOutputConsumerIterator.java:30)
+  281         at org.apache.pig.backend.hadoop.executionengine.spark.converter.POOutputConsumerIterator.hasNext(POOutputConsumerIterator.java:64)
+  282         at scala.collection.convert.Wrappers$JIteratorWrapper.hasNext(Wrappers.scala:41)
+  283         at scala.collection.Iterator$$anon$11.hasNext(Iterator.scala:327)
+  284         at org.apache.spark.rdd.PairRDDFunctions$$anonfun$12.apply(PairRDDFunctions.scala:987)
+  285         at org.apache.spark.rdd.PairRDDFunctions$$anonfun$12.apply(PairRDDFunctions.scala:965)
+  286         at org.apache.spark.scheduler.ResultTask.runTask(ResultTask.scala:61)
+  287         at org.apache.spark.scheduler.Task.run(Task.scala:56)
+  288         at org.apache.spark.executor.Executor$TaskRunner.run(Executor.scala:196)
+  289         at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+  290         at java.util.concurrent.ThreadPoolExecuto
+
+
+
+
+
+#--------------------------------------------------
+# Spark Plan
+#--------------------------------------------------
+
+Spark node scope-11
+Local Rearrange[tuple]{bytearray}(false) - null-1
+|   |
+|   Constant(DummyVal) - null-0
+|
+|---New For Each(false,true)[tuple] - scope-17
+    |   |
+    |   Project[int][0] - scope-8
+    |   |
+    |   POUserFunc(org.apache.pig.impl.builtin.GetMemNumRows)[tuple] - scope-16
+    |   |
+    |   |---Project[tuple][*] - scope-15
+    |
+    |---ReservoirSample - scope-14
+        |
+        |---b: Local Rearrange[tuple]{int}(false) - scope-12
+            |   |
+            |   Project[int][0] - scope-8
+            |
+            |---a: New For Each(false,false)[bag] - scope-7
+                |   |
+                |   Cast[int] - scope-2
+                |   |
+                |   |---Project[bytearray][0] - scope-1
+                |   |
+                |   Cast[chararray] - scope-5
+                |   |
+                |   |---Project[bytearray][1] - scope-4
+                |
+                |---a: Load(hdfs://liyunzhangcentos.sh.intel.com:8020/user/root/testlimit.txt:org.apache.pig.builtin.PigStorage) - scope-0--------
+
+Spark node scope-18
+New For Each(false)[tuple] - scope-26
+|   |
+|   POUserFunc(org.apache.pig.impl.builtin.FindQuantiles)[tuple] - scope-25
+|   |
+|   |---Project[tuple][*] - scope-24
+|
+|---New For Each(false,false)[tuple] - scope-23
+    |   |
+    |   Constant(-1) - scope-22
+    |   |
+    |   b: POSort[bag]() - scope-9
+    |   |   |
+    |   |   Project[int][0] - scope-21
+    |   |
+    |   |---Project[bag][1] - scope-20
+    |
+    |---Package(Packager)[tuple]{bytearray} - scope-19--------
+
+
+Spark node scope-27
+b: Local Rearrange[tuple]{int}(false) - scope-12
+|   |
+|   Project[int][0] - scope-8--------
+
+Spark node scope-28
+Limit - scope-32
+|
+|---New For Each(true)[tuple] - scope-31
+    |   |
+    |   Project[bag][1] - scope-30
+    |
+    |---Package(LitePackager)[tuple]{int} - scope-29--------
+
+Spark node scope-33
+c: Store(fakefile:org.apache.pig.builtin.PigStorage) - scope-10
+|
+|---Limit - scope-34--------
+
+
+problem existed:
+1. when 11 and 20 are to 30, POIdentityInOutTez is a POLocalRearrange, its
+predecessor are 11 and 20, but
+in org.apache.pig.backend.hadoop.executionengine.spark.converter.LocalRearrangeConverter.convert
+it judges whether its predecessor's size is 1.
+    SparkUtil.assertPredecessorSize(predecessors, physicalOperator, 1)?
+
+Tez vertex scope-11	->	Tez vertex scope-20,Tez vertex scope-30,
+Tez vertex scope-20	->	Tez vertex scope-30,
+Tez vertex scope-30	->	Tez vertex scope-32,
+Tez vertex scope-32	->	Tez vertex scope-43,
+Tez vertex scope-43
+
+ 1. In tez, it set edge.partitionerClass
+ sampleOut.addOutputKey(sortOpers[0].getOperatorKey().toString());
+ TezCompiler#L2280
+    edge = TezCompilerUtil.connect(tezPlan, sortOpers[0], sortOpers[1]);
+             edge.partitionerClass = WeightedRangePartitionerTez.class;
+
+2.
+org.apache.pig.backend.hadoop.executionengine.tez.TezDagBuilder.newEdge
+   if (edge.partitionerClass != null) {
+            conf.set(org.apache.hadoop.mapreduce.MRJobConfig.PARTITIONER_CLASS_ATTR,
+                    edge.partitionerClass.getName());
+        }
+
+ 3. but how to getQuantile file in tez
+
+ set Sample:
+ org.apache.pig.backend.hadoop.executionengine.tez.plan.TezCompiler.visitSort
+      sortOpers[0].setSampleOperator(quantJobParallelismPair.first);
+ org.apache.pig.backend.hadoop.executionengine.tez.TezDagBuilder.newVertex
+   if (tezOp.getSampleOperator() != null) {
+              payloadConf.set(PigProcessor.SAMPLE_VERTEX, tezOp.getSampleOperator().getOperatorKey().toString());
+          }
+
+
+   get Sample result:
+   org.apache.pig.backend.hadoop.executionengine.tez.runtime.PigProcessor.initializeInputs
+         sampleVertex = conf.get("pig.sampleVertex");
+               if (sampleVertex != null) {
+                   collectSample(sampleVertex, inputs.get(sampleVertex));
+                   inputsToSkip.add(sampleVertex);
+               }
+   org.apache.pig.backend.hadoop.executionengine.tez.runtime.PigProcessor.collectSample
+     private void collectSample(String sampleVertex, LogicalInput logicalInput) throws Exception {
+            String quantileMapCacheKey = "sample-" + sampleVertex  + ".quantileMap";
+            sampleMap =  (Map<String, Object>)ObjectCache.getInstance().retrieve(quantileMapCacheKey);
+            if (sampleMap != null) {
+                return;
+            }
+            LOG.info("Starting fetch of input " + logicalInput + " from vertex " + sampleVertex);
+            logicalInput.start();
+            KeyValueReader reader = (KeyValueReader) logicalInput.getReader();
+            reader.next();
+            Object val = reader.getCurrentValue();
+            if (val != null) {
+                // Sample is not empty
+                Tuple t = (Tuple) val;
+                sampleMap = (Map<String, Object>) t.get(0);
+                ObjectCache.getInstance().cache(quantileMapCacheKey, sampleMap);
+            } else {
+                LOG.warn("Cannot fetch sample from " + sampleVertex);
+            }
+        }
+
+   org.apache.pig.backend.hadoop.executionengine.tez.runtime.WeightedRangePartitionerTez.init
+             Map<String, Object> quantileMap = null;
+                   if (PigProcessor.sampleMap != null) {
+                       // We've collected sampleMap in PigProcessor
+                       quantileMap = PigProcessor.sampleMap;
+                   } else {
+                       LOG.warn("Quantiles map is empty");
+                       inited = true;
+                       return;
+                   }
+
+
+   org.apache.pig.backend.hadoop.executionengine.tez.runtime.WeightedRangePartitionerTez.getPartition
+
+   2015.3.18
+   #-----------------------------------------------
+   # Physical Plan:
+   #-----------------------------------------------
+   c: Store(fakefile:org.apache.pig.builtin.PigStorage) - scope-10
+   |
+   |---b: POSort[bag]() - scope-9
+       |   |
+       |   Project[int][0] - scope-8
+       |
+       |---a: New For Each(false,false)[bag] - scope-7
+           |   |
+           |   Cast[int] - scope-2
+           |   |
+           |   |---Project[bytearray][0] - scope-1
+           |   |
+           |   Cast[chararray] - scope-5
+           |   |
+           |   |---Project[bytearray][1] - scope-4
+           |
+           |---a: Load(hdfs://liyunzhangcentos.sh.intel.com:8020/user/root/testlimit.txt:org.apache.pig.builtin.PigStorage) - scope-0
+
+   #-----------------------------------------------------#
+   #The Spark node relations are:
+   #-----------------------------------------------------#
+   scope-11->scope-28 scope-18
+   scope-18
+   scope-28->scope-29
+   scope-29->scope-35
+   scope-35
+   #--------------------------------------------------
+   # Spark Plan
+   #--------------------------------------------------
+
+   Spark node scope-11
+   Local Rearrange[tuple]{bytearray}(false) - null-1
+   |   |
+   |   Constant(DummyVal) - null-0
+   |
+   |---New For Each(false,true)[tuple] - scope-17
+       |   |
+       |   Project[int][0] - scope-8
+       |   |
+       |   POUserFunc(org.apache.pig.impl.builtin.GetMemNumRows)[tuple] - scope-16
+       |   |
+       |   |---Project[tuple][*] - scope-15
+       |
+       |---ReservoirSample - scope-14
+           |
+           |---b: Local Rearrange[tuple]{int}(false) - scope-12
+               |   |
+               |   Project[int][0] - scope-8
+               |
+               |---a: New For Each(false,false)[bag] - scope-7
+                   |   |
+                   |   Cast[int] - scope-2
+                   |   |
+                   |   |---Project[bytearray][0] - scope-1
+                   |   |
+                   |   Cast[chararray] - scope-5
+                   |   |
+                   |   |---Project[bytearray][1] - scope-4
+                   |
+                   |---a: Load(hdfs://liyunzhangcentos.sh.intel.com:8020/user/root/testlimit.txt:org.apache.pig.builtin.PigStorage) - scope-0--------
+
+   Spark node scope-28
+   b: Local Rearrange[tuple]{int}(false) - scope-12
+   |   |
+   |   Project[int][0] - scope-8--------
+
+   Spark node scope-29
+   Limit - scope-34
+   |
+   |---New For Each(true)[tuple] - scope-33
+       |   |
+       |   Project[bag][1] - scope-32
+       |
+       |---Package(LitePackager)[tuple]{int} - scope-31
+           |
+           |---Global Rearrange[tuple] - scope-30--------
+
+   Spark node scope-35
+   c: Store(fakefile:org.apache.pig.builtin.PigStorage) - scope-10
+   |
+   |---Limit - scope-36--------
+
+   Spark node scope-18
+   New For Each(false)[tuple] - scope-27
+   |   |
+   |   POUserFunc(org.apache.pig.impl.builtin.FindQuantiles)[tuple] - scope-26
+   |   |
+   |   |---Project[tuple][*] - scope-25
+   |
+   |---New For Each(false,false)[tuple] - scope-24
+       |   |
+       |   Constant(-1) - scope-23
+       |   |
+       |   b: POSort[bag]() - scope-9
+       |   |   |
+       |   |   Project[int][0] - scope-22
+       |   |
+       |   |---Project[bag][1] - scope-21
+       |
+       |---Package(Packager)[tuple]{bytearray} - scope-20
+           |
+           |---Global Rearrange[tuple] - scope-19--------
+
+    2015.3.30
+
+    POIdentityInOutTez' s function is what?
+       /**
+        * POIdentityInOutTez is used to pass through tuples as is to next vertex from
+        * previous vertex's POLocalRearrangeTez. For eg: In case of Order By, the
+        * partition vertex which just applies the WeightedRangePartitioner on the
+        * previous vertex data uses POIdentityInOutTez.
+        */
+
+
+  In tez, it set edge.partitionerClass
+ sampleOut.addOutputKey(sortOpers[0].getOperatorKey().toString());
+ TezCompiler#L2280
+    edge = TezCompilerUtil.connect(tezPlan, sortOpers[0], sortOpers[1]);
+             edge.partitionerClass = WeightedRangePartitionerTez.class;
+
+
+    Designed spark plan
+    11->12, 14
+    12->13
+    13->14
+    scope=30 can be deleted?
+    scope-12's localRearrange and scope-13's package can be deleted?
+
+    Spark node scope-11
+    -a: New For Each(false,false)[bag] - scope-7
+        |   |
+        |   Cast[int] - scope-2
+        |   |
+        |   |---Project[bytearray][0] - scope-1
+        |   |
+        |   Cast[chararray] - scope-5
+        |   |
+        |   |---Project[bytearray][1] - scope-4
+        |
+        |---a: Load(hdfs://zly1.sh.intel.com:8020/user/root/testlimit.txt:org.apache.pig.builtin.PigStorage) - scope-0-
+
+    Spark node scope-12
+    	Local Rearrange[tuple]{tuple}(false) - scope-14	->	 scope-20
+    |   |
+    |   Constant(DummyVal) - scope-13
+    |
+    |---New For Each(false,true)[tuple] - scope-19
+        |   |
+        |   Project[int][0] - scope-8
+        |   |
+        |   POUserFunc(org.apache.pig.impl.builtin.GetMemNumRows)[tuple] - scope-18
+        |   |
+        |   |---Project[tuple][*] - scope-17
+        |
+        |---ReservoirSample - scope-16
+            |
+            |---b: Local Rearrange[tuple]{int}(false) - scope-12	->	 scope-30
+
+    Spark node scope-13
+      Store(hdfs://zly1.sh.intel.com:8020/tmp/temp2146669591/tmp300898425:org.apache.pig.impl.io.InterStorage) - scope-27
+      |
+      |---New For Each(false)[tuple] - scope-26
+        |   POUserFunc(org.apache.pig.backend.hadoop.executionengine.tez.plan.udf.FindQuantilesTez)[tuple] - scope-27
+        |   |
+        |   |---Project[tuple][*] - scope-26
+        |
+        |---New For Each(false,false)[tuple] - scope-25
+            |   |
+            |   Constant(-1) - scope-24
+            |   |
+            |   Project[bag][1] - scope-22
+            |
+            |---Package(Packager)[tuple]{bytearray} - scope-21
+
+
+    Spark node scope-14
+    c: Store(fakefile:org.apache.pig.builtin.PigStorage) - scope-10
+    |
+    |---Limit - scope-18
+        |
+        |---b: POSort[bag]() - scope-9
+            |   |
+            |   Project[int][0] - scope-8
+     Global sort: true
+     Quantile file: hdfs://zly1.sh.intel.com:8020/tmp/temp2146669591/tmp300898425
+
+
+       pigServer.registerQuery("A = load '" + INPUT_FILE1 + "' as (id:int, f);");
+             pigServer.registerQuery("B = group A by id;");
+             pigServer.registerQuery("C = foreach B { D = distinct A;" +
+                     "generate group, org.apache.pig.test.utils.AccumulatorBagCount(D)+1;};");
+
+B: Local Rearrange[tuple]{int}(false) - scope-9
+|   |
+|   Project[int][0] - scope-10
+|
+|---A: New For Each(false,false)[bag] - scope-6
+    |   |
+    |   Cast[int] - scope-2
+    |   |
+    |   |---Project[bytearray][0] - scope-1
+    |   |
+    |   Project[bytearray][1] - scope-4
+    |
+    |---A: Load(hdfs://localhost:56354/user/root/AccumulatorInput1.txt:org.apache.pig.builtin.PigStorage) - scope-0
+
+
+
+
+   C: Store(hdfs://localhost:56354/tmp/temp1749027753/tmp-1084493762:org.apache.pig.impl.io.InterStorage) - scope-20
+    |
+    |---C: New For Each(false,false)[bag] - scope-19
+        |   |
+        |   Project[int][0] - scope-11
+        |   |
+        |   Add[int] - scope-16
+        |   |
+        |   |---POUserFunc(org.apache.pig.test.utils.AccumulatorBagCount)[int] - scope-14
+        |   |   |
+        |   |   |---RelationToExpressionProject[bag][*] - scope-13
+        |   |       |
+        |   |       |---D: PODistinct[bag] - scope-18
+        |   |           |
+        |   |           |---Project[bag][1] - scope-17
+        |   |
+        |   |---Constant(1) - scope-15
+        |
+        |---B: Package(Packager)[tuple]{int} - scope-8
+            |
+            |---B: Global Rearrange[tuple] - scope-7
