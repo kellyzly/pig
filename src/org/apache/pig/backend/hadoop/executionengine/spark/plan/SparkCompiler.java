@@ -435,7 +435,11 @@ public class SparkCompiler extends PhyPlanVisitor {
 	@Override
 	public void visitSort(POSort op) throws VisitorException {
 		try {
+<<<<<<< HEAD
             addToPlan(op);
+=======
+            nonBlocking(op);
+>>>>>>> PIG-4438: Limit after sort situation does not work in spark mode (Liyun via Praveen)
             POSort sort = op;
             long limit = sort.getLimit();
             if (limit!=-1) {
