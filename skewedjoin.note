@@ -1,0 +1,183 @@
+script:
+A = load '/SkewedJoinInput1.txt' as (id,name,n);
+B = load '/SkewedJoinInput2.txt' as (id,name);
+C = join A by (id,name), B by (id,name) using 'skewed' parallel 5;
+store C into '/skewedjoin.out';
+explain C;
+
+#-----------------------------------------------
+# New Logical Plan:
+#-----------------------------------------------
+C: (Name: LOStore Schema: A::id#6:bytearray,A::name#7:bytearray,A::n#8:bytearray,B::id#9:bytearray,B::name#10:bytearray)
+|
+|---C: (Name: LOJoin(SKEWED) Schema: A::id#6:bytearray,A::name#7:bytearray,A::n#8:bytearray,B::id#9:bytearray,B::name#10:bytearray)
+    |   |
+    |   id:(Name: Project Type: bytearray Uid: 6 Input: 0 Column: 0)
+    |   |
+    |   name:(Name: Project Type: bytearray Uid: 7 Input: 0 Column: 1)
+    |   |
+    |   id:(Name: Project Type: bytearray Uid: 9 Input: 1 Column: 0)
+    |   |
+    |   name:(Name: Project Type: bytearray Uid: 10 Input: 1 Column: 1)
+    |
+    |---A: (Name: LOLoad Schema: id#6:bytearray,name#7:bytearray,n#8:bytearray)RequiredFields:[0, 1, 2]
+    |
+    |---B: (Name: LOLoad Schema: id#9:bytearray,name#10:bytearray)RequiredFields:[0, 1]
+#-----------------------------------------------
+# Physical Plan:
+#-----------------------------------------------
+C: Store(fakefile:org.apache.pig.builtin.PigStorage) - scope-7
+|
+|---C: SkewedJoin[tuple] - scope-6
+    |   |
+    |   Project[bytearray][0] - scope-2
+    |   |
+    |   Project[bytearray][1] - scope-3
+    |   |
+    |   Project[bytearray][0] - scope-4
+    |   |
+    |   Project[bytearray][1] - scope-5
+    |
+    |---A: Load(/SkewedJoinInput1.txt:org.apache.pig.builtin.PigStorage) - scope-0
+    |
+    |---B: Load(/SkewedJoinInput2.txt:org.apache.pig.builtin.PigStorage) - scope-1
+
+#--------------------------------------------------
+# Map Reduce Plan                                  
+#--------------------------------------------------
+MapReduce node scope-14
+Map Plan
+Local Rearrange[tuple]{tuple}(false) - scope-17
+|   |
+|   Constant(all) - scope-16
+|
+|---New For Each(true,true,true)[tuple] - scope-15
+    |   |
+    |   Project[bytearray][0] - scope-2
+    |   |
+    |   Project[bytearray][1] - scope-3
+    |   |
+    |   POUserFunc(org.apache.pig.impl.builtin.GetMemNumRows)[tuple] - scope-12
+    |   |
+    |   |---Project[tuple][*] - scope-11
+    |
+    |---Load(/SkewedJoinInput1.txt:org.apache.pig.impl.builtin.PoissonSampleLoader('org.apache.pig.builtin.PigStorage','100')) - scope-13--------
+Reduce Plan
+Store(hdfs://zly1.sh.intel.com:8020/tmp/temp-1801706062/tmp1481819365:org.apache.pig.impl.io.InterStorage) - scope-27
+|
+|---New For Each(false)[tuple] - scope-26
+    |   |
+    |   POUserFunc(org.apache.pig.impl.builtin.PartitionSkewedKeys)[tuple] - scope-25
+    |   |
+    |   |---Project[tuple][*] - scope-24
+    |
+    |---New For Each(false,false)[tuple] - scope-23
+        |   |
+        |   Constant(5) - scope-22
+        |   |
+        |   Project[bag][1] - scope-19
+        |
+        |---Package(Packager)[tuple]{chararray} - scope-18--------
+Global sort: false
+Secondary sort: true
+----------------
+
+MapReduce node scope-33
+Map Plan
+Union[tuple] - scope-34
+|
+|---Local Rearrange[tuple]{tuple}(false) - scope-30
+|   |   |
+|   |   Project[bytearray][0] - scope-2
+|   |   |
+|   |   Project[bytearray][1] - scope-3
+|   |
+|   |---Load(/SkewedJoinInput1.txt:org.apache.pig.builtin.PigStorage) - scope-28
+|
+|---Partition rearrange [bag]{tuple}(false) - scope-31
+    |   |
+    |   Project[bytearray][0] - scope-4
+    |   |
+    |   Project[bytearray][1] - scope-5
+    |
+    |---B: Load(/SkewedJoinInput2.txt:org.apache.pig.builtin.PigStorage) - scope-1--------
+Reduce Plan
+C: Store(fakefile:org.apache.pig.builtin.PigStorage) - scope-7
+|
+|---Package(JoinPackager(true,true))[tuple]{tuple} - scope-35--------
+Global sort: false
+----------------
+
+
+
+only fail unit test:
+TestSkewedJoin#testSkewedJoinKeyPartition
+at org.apache.pig.test.TestSkewedJoin.testSkewedJoinKeyPartition(TestSkewedJoin.java:326)
+
+    @Test
+      public void testSkewedJoinKeyPartition() throws IOException {
+          String outputDir = "testSkewedJoinKeyPartition";
+          try{
+               Util.deleteFile(cluster, outputDir);
+          }catch(Exception e){
+              // it is ok if directory not exist
+          }
+
+           pigServer.registerQuery("A = LOAD '" + INPUT_FILE1 + "' as (id, name, n);");
+           pigServer.registerQuery("B = LOAD '" + INPUT_FILE2 + "' as (id, name);");
+           pigServer.registerQuery("E = join A by id, B by id using 'skewed' parallel 7;");
+           pigServer.store("E", outputDir);
+
+           int[][] lineCount = new int[3][7];
+
+           FileStatus[] outputFiles = fs.listStatus(new Path(outputDir), Util.getSuccessMarkerPathFilter());
+           // check how many times a key appear in each part- file
+           for (int i=0; i<7; i++) {
+               String filename = outputFiles[i].getPath().toString();
+               Util.copyFromClusterToLocal(cluster, filename, OUTPUT_DIR + "/" + i);
+               BufferedReader reader = new BufferedReader(new FileReader(OUTPUT_DIR + "/" + i));
+               String line = null;
+               while((line = reader.readLine()) != null) {
+                   String[] cols = line.split("\t");
+                   //Kelly's comment:
+                   //line:100       apple1  aaa210  100     apple2      why 210 here?
+                   //line:100       apple1  aaa147  100     apple2
+                   int key = Integer.parseInt(cols[0])/100 -1;
+                   lineCount[key][i] ++;
+               }
+               reader.close();
+           }
+
+           int fc = 0;
+           for(int i=0; i<3; i++) {
+               for(int j=0; j<7; j++) {
+                   if (lineCount[i][j] > 0) {
+                       fc ++;
+                   }
+               }
+           }
+           // atleast one key should be a skewed key
+           // check atleast one key should appear in more than 1 part- file
+           assertTrue(fc > 3);
+      }
+
+spark will save the result to
+hdfs://localhost:34903/user/root/testSkewedJoinKeyPartition/part-r-00002
+hdfs://localhost:34903/user/root/testSkewedJoinKeyPartition/part-r-00004
+hdfs://localhost:34903/user/root/testSkewedJoinKeyPartition/part-r-00006
+while hdfs://localhost:34903/user/root/testSkewedJoinKeyPartition/part-r-00000, 00001, 00003, 00005 will be empty file
+
+1459 [main] 2015-04-17 14:04:42,484 INFO  test.TestSkewedJoin (TestSkewedJoin.java:testSkewedJoinKeyPartition(326)) - lineCount[0][2] >0
+1460 [main] 2015-04-17 14:04:42,485 INFO  test.TestSkewedJoin (TestSkewedJoin.java:testSkewedJoinKeyPartition(326)) - lineCount[1][4] >0
+1461 [main] 2015-04-17 14:04:42,485 INFO  test.TestSkewedJoin (TestSkewedJoin.java:testSkewedJoinKeyPartition(326)) - lineCount[2][6] >0
+1462 [main] 2015-04-17 14:04:42,485 INFO  test.TestSkewedJoin (TestSkewedJoin.java:testSkewedJoinKeyPartition(333)) - fc:3
+
+the reason why fails
+if we set pig.skewedjoin.reduce.memusage=0.01 in conf/pig.properties.
+The result will be saved in part-r-00000~part-r-00006.
+
+The more detailed explanantion about "pig.skewedjoin.reduce.memusage" is:
+# Fraction of heap available for the reducer to perform a skewed join. A low
+# fraction forces Pig to use more reducers, but increases the copying cost. See
+# http://pig.apache.org/docs/r0.12.0/perf.html#skewed-joins
+
