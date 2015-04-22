@@ -1,0 +1,63 @@
+A = load '/SkewedJoinInput1.txt' as (id,name,n);
+B = load '/SkewedJoinInput2.txt' as (id,name);
+C = join A by (id,name), B by (id,name) using 'replicated';
+store C into './testFRJoin.out';
+explain C;
+
+
+#-----------------------------------------------
+# Physical Plan:
+#-----------------------------------------------
+C: Store(fakefile:org.apache.pig.builtin.PigStorage) - scope-12
+|
+|---C: FRJoin[tuple] - scope-6
+    |   |
+    |   Project[bytearray][0] - scope-2
+    |   |
+    |   Project[bytearray][1] - scope-3
+    |   |
+    |   Project[bytearray][0] - scope-4
+    |   |
+    |   Project[bytearray][1] - scope-5
+    |
+    |---A: Load(/SkewedJoinInput1.txt:org.apache.pig.builtin.PigStorage) - scope-0
+    |
+    |---B: Load(/SkewedJoinInput2.txt:org.apache.pig.builtin.PigStorage) - scope-1
+
+#--------------------------------------------------
+# Map Reduce Plan                                  
+#--------------------------------------------------
+MapReduce node scope-14
+Map Plan
+Store(hdfs://zly1.sh.intel.com:8020/tmp/temp320960193/tmp-90619652:org.apache.pig.impl.io.InterStorage) - scope-15
+|
+|---B: Load(/SkewedJoinInput2.txt:org.apache.pig.builtin.PigStorage) - scope-1--------
+Global sort: false
+----------------
+
+MapReduce node scope-13
+Map Plan
+C: Store(fakefile:org.apache.pig.builtin.PigStorage) - scope-12
+|
+|---C: FRJoin[tuple] - scope-6
+    |   |
+    |   Project[bytearray][0] - scope-2
+    |   |
+    |   Project[bytearray][1] - scope-3
+    |   |
+    |   Project[bytearray][0] - scope-4
+    |   |
+    |   Project[bytearray][1] - scope-5
+    |
+    |---A: Load(/SkewedJoinInput1.txt:org.apache.pig.builtin.PigStorage) - scope-0--------
+Global sort: false
+
+
+Replicated Join
+When to use
+	One of the datasets is small enough that it fits in the memory.
+How it works
+	A replicated join copies the small dataset to the distributed cache - space that is available on every cluster machine - and loads it into the memory. Each mapper processes a split of the big dataset and looks for matching records in the smaller one. Since the data is available in the memory, and is processed on the map side of MapReduce, this operation works much faster than a default join. Both inner and outer joins are available and the small dataset should be on join’s right side.
+
+Pasted from <https://www.xplenty.com/blog/2014/05/improving-pig-data-integration-performance-with-join/> 
+
