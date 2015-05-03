@@ -440,11 +440,7 @@ public class SparkCompiler extends PhyPlanVisitor {
 	@Override
 	public void visitSort(POSort op) throws VisitorException {
 		try {
-<<<<<<< HEAD
             addToPlan(op);
-=======
-            nonBlocking(op);
->>>>>>> PIG-4438: Limit after sort situation does not work in spark mode (Liyun via Praveen)
             POSort sort = op;
             long limit = sort.getLimit();
             if (limit!=-1) {
@@ -609,102 +605,28 @@ public class SparkCompiler extends PhyPlanVisitor {
 		}
 	}
 
-	@Override
-	public void visitSkewedJoin(POSkewedJoin op) throws VisitorException {
-        POSkewedJoin poSkewedJoin = op;
+    /**
+     * currently use regular join to replace skewedJoin
+     * Skewed join currently works with two-table inner join.
+     * More info about pig SkewedJoin, See https://wiki.apache.org/pig/PigSkewedJoinSpec
+     *
+     * @param op
+     * @throws VisitorException
+     */
+    @Override
+    public void visitSkewedJoin(POSkewedJoin op) throws VisitorException {
+        // TODO
         try {
-            int rp = poSkewedJoin.getRequestedParallelism();
-            if( compiledInputs.length != 2){
-                int errCode = 2171;
-                String errMsg = "Expected 2 predecessors before POSkewedJoin in the physicalPlan.";
-                throw new SparkCompilerException(errMsg, errCode, PigException.BUG);
-            }
-
-            int idx = -1;
-            MultiMap<PhysicalOperator, PhysicalPlan> joinPlans = poSkewedJoin.getJoinPlans();
-            List<PhysicalOperator> predecessors = physicalPlan.getPredecessors(op);
-            List<PhysicalPlan> groups = joinPlans.get(predecessors.get(0));
-
-            // check the type of group keys, if there are more than one field, the key is TUPLE.
-            byte type = DataType.TUPLE;
-            if (groups.size() == 1) {
-                type = groups.get(0).getLeaves().get(0).getResultType();
-            }
-
-            SparkOperator[] tCompileInputs = compiledInputs;
-            for(PhysicalOperator inpPhyOp: joinPlans.keySet()){
-                idx++;
-                POLocalRearrange lr = new POLocalRearrange(OperatorKey.genOpKey(scope),rp);
-                try {
-                    lr.setIndex(idx);
-                } catch (ExecException e) {
-                    throw new PlanException(e.getMessage(), e.getErrorCode(), e.getErrorSource(), e);
-                }
-                lr.setResultType(DataType.TUPLE);
-                lr.setKeyType(type);
-                lr.setPlans(joinPlans.get(inpPhyOp));
-                compiledInputs = new SparkOperator[]{tCompileInputs[idx]};
-                lr.visit(this);
-                if(lr.getRequestedParallelism() > curSparkOp.requestedParallelism) {
-                    curSparkOp.requestedParallelism = lr.getRequestedParallelism();
-                }
-            }
-
-            compiledInputs = tCompileInputs;
-            POGlobalRearrange gr = new POGlobalRearrange(OperatorKey.genOpKey(scope),rp);
-            gr.setResultType(DataType.TUPLE);
-            gr.visit(this);
-            if(gr.getRequestedParallelism() > curSparkOp.requestedParallelism)
-                curSparkOp.requestedParallelism = gr.getRequestedParallelism();
-            compiledInputs = new SparkOperator[] {curSparkOp};
-
-
-            POPackage pkg = new POPackage(OperatorKey.genOpKey(scope),rp);
-            Packager pkgr = pkg.getPkgr();
-            pkgr.setKeyType(type);
-            pkg.setResultType(DataType.TUPLE);
-            pkg.setNumInps(2);
-            boolean [] inner = poSkewedJoin.getInnerFlags();
-            pkgr.setInner(inner);
-            pkg.visit(this);
-            compiledInputs = new SparkOperator[]{curSparkOp};
-
-            // create POForEach
-            List<PhysicalPlan> eps = new ArrayList<PhysicalPlan>();
-            List<Boolean> flat = new ArrayList<Boolean>();
-
-            PhysicalPlan ep;
-            // Add corresponding POProjects
-            for (int i=0; i < 2; i++ ) {
-                ep = new PhysicalPlan();
-                POProject prj = new POProject(new OperatorKey(scope,nig.getNextNodeId(scope)));
-                prj.setColumn(i+1);
-                prj.setOverloaded(false);
-                prj.setResultType(DataType.BAG);
-                ep.add(prj);
-                eps.add(ep);
-                if (!inner[i]) {
-                    // Add an empty bag for outer join
-                    CompilerUtils.addEmptyBagOuterJoin(ep, poSkewedJoin.getSchema(i));
-                }
-                flat.add(true);
-            }
-
-            POForEach fe = new POForEach(new OperatorKey(scope,nig.getNextNodeId(scope)), -1, eps, flat);
-            fe.setResultType(DataType.TUPLE);
-
-            fe.visit(this);
-
-            phyToSparkOpMap.put(poSkewedJoin, curSparkOp);
-
+            addToPlan(op);
+            phyToSparkOpMap.put(op, curSparkOp);
         } catch (Exception e) {
             int errCode = 2034;
             String msg = "Error compiling operator "
-                    + poSkewedJoin.getClass().getSimpleName();
+                    + op.getClass().getSimpleName();
             throw new SparkCompilerException(msg, errCode, PigException.BUG, e);
         }
-	}
-
+    }
+ 
 	@Override
 	public void visitFRJoin(POFRJoin op) throws VisitorException {
 		// TODO
