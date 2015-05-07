@@ -1394,4 +1394,12 @@ public class Util {
         });
         return parts[0]; 
     }
+
+    public static boolean isSparkExecType(ExecType execType) {
+        if (execType.name().toLowerCase().startsWith("spark")) {
+            return true;
+        }
+
+        return false;
+    }
 }
