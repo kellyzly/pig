@@ -62,3 +62,4 @@
 **/TestMergeJoin.java
 **/TestNativeMapReduce.java
 **/TestPigProgressReporting.java
+**/TestSecondarySortSpark.java
