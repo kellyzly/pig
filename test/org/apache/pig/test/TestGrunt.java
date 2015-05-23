@@ -36,6 +36,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.log4j.Appender;
 import org.apache.log4j.FileAppender;
 import org.apache.log4j.Level;
@@ -61,7 +63,8 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 public class TestGrunt {
-
+    private static final Log LOG = LogFactory
+            .getLog(TestGrunt.class);
     static MiniGenericCluster cluster = MiniGenericCluster.buildCluster();
     private String basedir = "test/org/apache/pig/test/data";
 
@@ -929,13 +932,20 @@ public class TestGrunt {
         Grunt grunt = new Grunt(new BufferedReader(reader), context);
 
         boolean caught = false;
-        try {
-            grunt.exec();
-        } catch (Exception e) {
-            caught = true;
-            assertTrue(e.getMessage().contains("baz does not exist"));
+        // in mr mode, the output file 'baz' will be automatically deleted if the mr job fails
+        // when "cat baz;" is executed, it throws "Encountered IOException. Directory baz does not exist"
+        // in GruntParser#processCat() and variable "caught" is true
+        // in spark mode, the output file 'baz' will not be automatically deleted even the job fails(see SPARK_5836)
+        // when "cat baz;" is executed, it does not throw exception and the variable "caught" is false
+        if(!Util.isSparkExecType(cluster.getExecType())) {
+            try {
+                grunt.exec();
+            } catch (Exception e) {
+                caught = true;
+                assertTrue(e.getMessage().contains("baz does not exist"));
+            }
+            assertTrue(caught);
         }
-        assertTrue(caught);
     }
 
     @Test
@@ -1473,7 +1483,7 @@ public class TestGrunt {
         JavaCompilerHelper javaCompilerHelper = new JavaCompilerHelper();
         javaCompilerHelper.compile(tmpDir.getAbsolutePath(),
                 new JavaCompilerHelper.JavaSourceFromString("com.xxx.udf.TestUDF", udfSrc));
-        
+
         String jarName = "TestUDFJar.jar";
         String jarFile = tmpDir.getAbsolutePath() + FILE_SEPARATOR + jarName;
         int status = Util.executeJavaCommand("jar -cf " + jarFile +
@@ -1491,6 +1501,10 @@ public class TestGrunt {
         String cmd = "java -cp " + System.getProperty("java.class.path") + File.pathSeparator + jarFile +
                 " org.apache.pig.Main " + execTypeOptions + scriptFileName;
         ProcessReturnInfo  pri  = Util.executeJavaCommandAndReturnInfo(cmd);
+
+        LOG.debug("pri.stderrContents:"+pri.stderrContents);
+        LOG.debug("pri.stdoutContents:"+pri.stdoutContents);
+        LOG.debug("jarName:"+jarName);
         assertEquals(pri.exitCode, 0);
         String[] lines = pri.stderrContents.split("\n");
         boolean found = false;
@@ -1501,7 +1515,11 @@ public class TestGrunt {
             } else if (line.matches(".*Local resource.*" + jarName + ".*")) {
                 // Tez mode
                 found = true;
+            }  else if( line.matches(".*ADDED JAR .*"+jarName+".*")){
+                // Spark mode
+                found = true;
             }
+
         }
         assertTrue(found);
     }
