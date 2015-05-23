@@ -27,6 +27,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.pig.CollectableLoadFunc;
 import org.apache.pig.IndexableLoadFunc;
 import org.apache.pig.LoadFunc;
@@ -59,8 +61,10 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOpe
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POUnion;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.Packager;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.util.PlanHelper;
+import org.apache.pig.backend.hadoop.executionengine.spark.SparkLauncher;
 import org.apache.pig.backend.hadoop.executionengine.spark.operator.NativeSparkOperator;
 import org.apache.pig.backend.hadoop.executionengine.spark.operator.POGlobalRearrangeSpark;
+import org.apache.pig.builtin.LOG;
 import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.io.FileSpec;
 import org.apache.pig.impl.plan.DepthFirstWalker;
@@ -76,6 +80,8 @@ import org.apache.pig.impl.plan.VisitorException;
  * operators
  */
 public class SparkCompiler extends PhyPlanVisitor {
+    private static final Log LOG = LogFactory.getLog(SparkCompiler.class);
+
     private PigContext pigContext;
 
     // The physicalPlan that is being compiled
@@ -121,7 +127,7 @@ public class SparkCompiler extends PhyPlanVisitor {
         scope = roots.get(0).getOperatorKey().getScope();
         List<PhysicalOperator> leaves = physicalPlan.getLeaves();
 
-        if (!pigContext.inIllustrator)
+        if (!pigContext.inIllustrator) {
             for (PhysicalOperator op : leaves) {
                 if (!(op instanceof POStore)) {
                     int errCode = 2025;
@@ -132,6 +138,7 @@ public class SparkCompiler extends PhyPlanVisitor {
                             PigException.BUG);
                 }
             }
+        }
 
         // get all stores and nativeSpark operators, sort them in order(operator
         // id)
@@ -154,6 +161,8 @@ public class SparkCompiler extends PhyPlanVisitor {
         Collections.sort(ops);
 
         for (PhysicalOperator op : ops) {
+            if (LOG.isDebugEnabled())
+                LOG.debug("Starting compile of leaf-level operator " + op);
             compile(op);
         }
     }
@@ -170,6 +179,10 @@ public class SparkCompiler extends PhyPlanVisitor {
     private void compile(PhysicalOperator op) throws IOException,
             PlanException, VisitorException {
         SparkOperator[] prevCompInp = compiledInputs;
+
+        if (LOG.isDebugEnabled())
+            LOG.debug("Compiling physical operator " + op +
+                    ". Current spark operator is " + curSparkOp);
 
         List<PhysicalOperator> predecessors = physicalPlan.getPredecessors(op);
         if (op instanceof PONative) {
@@ -249,7 +262,10 @@ public class SparkCompiler extends PhyPlanVisitor {
     }
 
     private SparkOperator getSparkOp() {
-        return new SparkOperator(OperatorKey.genOpKey(scope));
+        SparkOperator op = new SparkOperator(OperatorKey.genOpKey(scope));
+        if (LOG.isDebugEnabled())
+            LOG.debug("Created new Spark operator " + op);
+        return op;
     }
 
     public SparkOperPlan getSparkPlan() {
@@ -557,6 +573,10 @@ public class SparkCompiler extends PhyPlanVisitor {
         try {
             POGlobalRearrangeSpark glbOp = new POGlobalRearrangeSpark(op);
             addToPlan(glbOp);
+            if (op.isCross()) {
+                curSparkOp.addCrossKey(op.getOperatorKey().toString());
+            }
+
             curSparkOp.customPartitioner = op.getCustomPartitioner();
             phyToSparkOpMap.put(op, curSparkOp);
         } catch (Exception e) {
@@ -688,6 +708,8 @@ public class SparkCompiler extends PhyPlanVisitor {
         List<PhysicalPlan> toBeMerged = new ArrayList<PhysicalPlan>();
 
         for (SparkOperator sparkOp : compiledInputs) {
+            if (LOG.isDebugEnabled())
+                LOG.debug("Merging Spark operator" + sparkOp);
             toBeRemoved.add(sparkOp);
             toBeMerged.add(sparkOp.physicalPlan);
             List<SparkOperator> predecessors = sparkPlan

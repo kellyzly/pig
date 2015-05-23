@@ -95,6 +95,7 @@ import org.apache.pig.backend.hadoop.executionengine.spark.converter.UnionConver
 import org.apache.pig.backend.hadoop.executionengine.spark.operator.POGlobalRearrangeSpark;
 import org.apache.pig.backend.hadoop.executionengine.spark.optimizer.AccumulatorOptimizer;
 import org.apache.pig.backend.hadoop.executionengine.spark.optimizer.SecondaryKeyOptimizerSpark;
+import org.apache.pig.backend.hadoop.executionengine.spark.optimizer.ParallelismSetter;
 import org.apache.pig.backend.hadoop.executionengine.spark.plan.SparkCompiler;
 import org.apache.pig.backend.hadoop.executionengine.spark.plan.SparkOperPlan;
 import org.apache.pig.backend.hadoop.executionengine.spark.plan.SparkOperator;
@@ -173,6 +174,8 @@ public class SparkLauncher extends Launcher {
 			MapRedUtil.setupStreamingDirsConfSingle(firstStore, pigContext,
 					jobConf);
 		}
+
+		new ParallelismSetter(sparkplan, jobConf).visit();
 
 		byte[] confBytes = KryoSerializer.serializeJobConf(jobConf);
 
@@ -445,8 +448,8 @@ public class SparkLauncher extends Launcher {
 
 	private void sparkPlanToRDD(SparkOperPlan sparkPlan,
 			Map<Class<? extends PhysicalOperator>, POConverter> convertMap,
-			SparkPigStats sparkStats, JobConf jobConf) throws IOException,
-			InterruptedException {
+			SparkPigStats sparkStats, JobConf jobConf)
+			throws IOException, InterruptedException {
 		Set<Integer> seenJobIDs = new HashSet<Integer>();
 		if (sparkPlan == null) {
 			throw new RuntimeException("SparkPlan is null.");
