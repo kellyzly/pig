@@ -477,8 +477,12 @@ public class SparkLauncher extends Launcher {
             Class clazz = pigContext.getClassForAlias(udf);
             if (clazz != null) {
                 String jar = JarManager.findContainingJar(clazz);
-                File jarFile = new File(jar);
-                addJarToSparkJobWorkingDirectory(jarFile, jarFile.getName());
+                if( jar != null) {
+                    File jarFile = new File(jar);
+                    addJarToSparkJobWorkingDirectory(jarFile, jarFile.getName());
+                } else{
+                    LOG.info("jar is null, udf: "+udf);
+                }
             }
         }
     }
