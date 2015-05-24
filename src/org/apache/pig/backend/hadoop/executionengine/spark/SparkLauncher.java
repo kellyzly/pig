@@ -419,7 +419,7 @@ public class SparkLauncher extends Launcher {
 				master = System.getenv("SPARK_MASTER");
 				if (master == null) {
 					LOG.info("SPARK_MASTER not specified, using \"local\"");
-					master = "local";
+                    master = "local-cluster[2, 2, 1024]";
 				}
 			}
 
@@ -451,7 +451,7 @@ public class SparkLauncher extends Launcher {
 	// You can use this in unit tests to stop the SparkContext between tests.
 	static void stopSpark() {
 		if (sparkContext != null) {
-			sparkContext.stop();
+            sparkContext.stop();
 			sparkContext = null;
 		}
 	}
