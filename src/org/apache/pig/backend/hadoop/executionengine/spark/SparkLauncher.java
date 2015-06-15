@@ -17,9 +17,6 @@
  */
 package org.apache.pig.backend.hadoop.executionengine.spark;
 
-import com.google.common.base.Joiner;
-import com.google.common.collect.Lists;
-
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
@@ -43,7 +40,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.JobConf;
-
 import org.apache.pig.PigConfiguration;
 import org.apache.pig.PigConstants;
 import org.apache.pig.PigException;
@@ -67,15 +63,36 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOpe
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POSkewedJoin;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POSort;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POSplit;
-import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStream;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStore;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStream;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POUnion;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.util.PlanHelper;
-import org.apache.pig.backend.hadoop.executionengine.spark.converter.*;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.CollectedGroupConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.CounterConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.DistinctConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.FRJoinConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.FilterConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.ForEachConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.GlobalRearrangeConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.LimitConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.LoadConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.LocalRearrangeConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.MergeJoinConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.PackageConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.RDDConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.RankConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.SkewedJoinConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.SortConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.SplitConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.StoreConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.StreamConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.UnionConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.operator.POGlobalRearrangeSpark;
 import org.apache.pig.backend.hadoop.executionengine.spark.optimizer.AccumulatorOptimizer;
-import org.apache.pig.backend.hadoop.executionengine.spark.optimizer.SecondaryKeyOptimizerSpark;
+import org.apache.pig.backend.hadoop.executionengine.spark.optimizer.MultiQueryOptimizerSpark;
+import org.apache.pig.backend.hadoop.executionengine.spark.optimizer.NoopFilterRemover;
 import org.apache.pig.backend.hadoop.executionengine.spark.optimizer.ParallelismSetter;
+import org.apache.pig.backend.hadoop.executionengine.spark.optimizer.SecondaryKeyOptimizerSpark;
 import org.apache.pig.backend.hadoop.executionengine.spark.plan.SparkCompiler;
 import org.apache.pig.backend.hadoop.executionengine.spark.plan.SparkOperPlan;
 import org.apache.pig.backend.hadoop.executionengine.spark.plan.SparkOperator;
@@ -96,7 +113,9 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.rdd.RDD;
 import org.apache.spark.scheduler.JobLogger;
 import org.apache.spark.scheduler.StatsReportListener;
-import org.apache.spark.SparkException;
+
+import com.google.common.base.Joiner;
+import com.google.common.collect.Lists;
 
 /**
  * Main class that launches pig for Spark
@@ -181,7 +200,7 @@ public class SparkLauncher extends Launcher {
 		convertMap.put(POCounter.class, new CounterConverter());
 		convertMap.put(PORank.class, new RankConverter());
 		convertMap.put(POStream.class, new StreamConverter(confBytes));
-                convertMap.put(POFRJoin.class, new FRJoinConverter());
+        convertMap.put(POFRJoin.class, new FRJoinConverter());
 
 		sparkPlanToRDD(sparkplan, convertMap, sparkStats, jobConf);
 		cleanUpSparkJob();
@@ -190,7 +209,7 @@ public class SparkLauncher extends Launcher {
 		return sparkStats;
 	}
 
-    private void optimize(PigContext pc, SparkOperPlan plan) throws VisitorException {
+    private void optimize(PigContext pc, SparkOperPlan plan) throws IOException {
         String prop = pc.getProperties().getProperty(PigConfiguration.PIG_EXEC_NO_SECONDARY_KEY);
         if (!pc.inIllustrator && !("true".equals(prop))) {
             SecondaryKeyOptimizerSpark skOptimizer = new SecondaryKeyOptimizerSpark(plan);
@@ -202,6 +221,31 @@ public class SparkLauncher extends Launcher {
         if (isAccum) {
             AccumulatorOptimizer accum = new AccumulatorOptimizer(plan);
             accum.visit();
+        }
+
+        // removes the filter(constant(true)) operators introduced by
+        // splits.
+        NoopFilterRemover fRem = new NoopFilterRemover(plan);
+        fRem.visit();
+
+        boolean isMultiQuery =
+                Boolean.valueOf(pc.getProperties().getProperty(PigConfiguration.PIG_OPT_MULTIQUERY, "true"));
+
+        if (LOG.isDebugEnabled()) {
+            System.out.println("before multiquery optimization:");
+            explain(plan, System.out, "text", true);
+        }
+
+        if (isMultiQuery) {
+            // reduces the number of SparkOpers in the Spark plan generated
+            // by multi-query (multi-store) script.
+            MultiQueryOptimizerSpark mqOptimizer = new MultiQueryOptimizerSpark(plan);
+            mqOptimizer.visit();
+        }
+
+        if (LOG.isDebugEnabled()) {
+            System.out.println("after multiquery optimization:");
+            explain(plan, System.out, "text", true);
         }
     }
 
@@ -491,53 +535,43 @@ public class SparkLauncher extends Launcher {
 		List<PhysicalOperator> leafPOs = sparkOperator.physicalPlan.getLeaves();
 		boolean isFail = false;
 		Exception exception = null;
-		if (leafPOs != null && leafPOs.size() != 1) {
-			throw new IllegalArgumentException(
-					String.format(
-							"sparkOperator "
-									+ ".physicalPlan should have 1 leaf, but  sparkOperator"
-									+ ".physicalPlan.getLeaves():{} not equals 1, sparkOperator"
-									+ "sparkOperator:{}",
-							sparkOperator.physicalPlan.getLeaves().size(),
-							sparkOperator.name()));
-		}
-
-		PhysicalOperator leafPO = leafPOs.get(0);
-		try {
-			physicalToRDD(sparkOperator.physicalPlan, leafPO, physicalOpRdds,
-					predecessorRDDs, convertMap);
-			sparkOpRdds.put(sparkOperator.getOperatorKey(),
-					physicalOpRdds.get(leafPO.getOperatorKey()));
-		} catch(Exception e) {
-			if( e instanceof  SparkException) {
-				LOG.info("throw SparkException, error founds when running " +
-						"rdds in spark");
-			}
-			exception = e;
-			isFail = true;
-		}
+        //One SparkOperator may have multiple leaves(POStores) after multiquery feature is enabled
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("sparkOperator.physicalPlan have " + sparkOperator.physicalPlan.getLeaves().size() + " leaves");
+        }
+        for (PhysicalOperator leafPO : leafPOs) {
+            try {
+                physicalToRDD(sparkOperator.physicalPlan, leafPO, physicalOpRdds,
+                        predecessorRDDs, convertMap);
+                sparkOpRdds.put(sparkOperator.getOperatorKey(),
+                        physicalOpRdds.get(leafPO.getOperatorKey()));
+            } catch (Exception e) {
+                LOG.error("throw exception in sparkOperToRDD: ", e);
+                exception = e;
+                isFail = true;
+            }
+        }
 
 		List<POStore> poStores = PlanHelper.getPhysicalOperators(
 				sparkOperator.physicalPlan, POStore.class);
-		if (poStores != null && poStores.size() == 1) {
-			  POStore poStore = poStores.get(0);
+        Collections.sort(poStores);
+        if (poStores.size() > 0) {
+            int i = 0;
             if (!isFail) {
-                for (int jobID : getJobIDs(seenJobIDs)) {
-                    SparkStatsUtil.waitForJobAddStats(jobID, poStore,
+                List<Integer> jobIDs = getJobIDs(seenJobIDs);
+                for (POStore poStore : poStores) {
+                    SparkStatsUtil.waitForJobAddStats(jobIDs.get(i++), poStore,
                             jobMetricsListener, sparkContext, sparkStats, conf);
                 }
             } else {
-                String failJobID = sparkOperator.name().concat("_fail");
-                SparkStatsUtil.addFailJobStats(failJobID, poStore, sparkStats,
-                        conf, exception);
+                for (POStore poStore : poStores) {
+                    String failJobID = sparkOperator.name().concat("_fail");
+                    SparkStatsUtil.addFailJobStats(failJobID, poStore, sparkStats,
+                            conf, exception);
+                }
             }
-        } else {
-			LOG.info(String
-					.format(String.format("sparkOperator:{} does not have POStore or" +
-									" sparkOperator has more than 1 POStore. {} is the size of POStore."),
-							sparkOperator.name(), poStores.size()));
-		}
-	}
+        }
+    }
 
 	private void physicalToRDD(PhysicalPlan plan,
 			PhysicalOperator physicalOperator,
@@ -567,25 +601,38 @@ public class SparkLauncher extends Launcher {
 			}
 		}
 
-		RDDConverter converter = convertMap.get(physicalOperator.getClass());
-		if (converter == null) {
-			throw new IllegalArgumentException(
-					"Pig on Spark does not support Physical Operator: " + physicalOperator);
-		}
+        if (physicalOperator instanceof POSplit) {
+            List<PhysicalPlan> successorPlans = ((POSplit) physicalOperator).getPlans();
+            for (PhysicalPlan successPlan : successorPlans) {
+                List<PhysicalOperator> leavesOfSuccessPlan = successPlan.getLeaves();
+                if (leavesOfSuccessPlan.size() != 1) {
+                    LOG.error("the size of leaves of SuccessPlan should be 1");
+                    break;
+                }
+                PhysicalOperator leafOfSuccessPlan = leavesOfSuccessPlan.get(0);
+                physicalToRDD(successPlan, leafOfSuccessPlan, rdds, predecessorRdds, convertMap);
+            }
+        } else {
+            RDDConverter converter = convertMap.get(physicalOperator.getClass());
+            if (converter == null) {
+                throw new IllegalArgumentException(
+                        "Pig on Spark does not support Physical Operator: " + physicalOperator);
+            }
 
-		LOG.info("Converting operator "
-				+ physicalOperator.getClass().getSimpleName() + " "
-				+ physicalOperator);
-		nextRDD = converter.convert(predecessorRdds, physicalOperator);
+            LOG.info("Converting operator "
+                    + physicalOperator.getClass().getSimpleName() + " "
+                    + physicalOperator);
+            nextRDD = converter.convert(predecessorRdds, physicalOperator);
 
-		if (nextRDD == null) {
-			throw new IllegalArgumentException(
-					"RDD should not be null after PhysicalOperator: "
-							+ physicalOperator);
-		}
+            if (nextRDD == null) {
+                throw new IllegalArgumentException(
+                        "RDD should not be null after PhysicalOperator: "
+                                + physicalOperator);
+            }
 
-		rdds.put(physicalOperator.getOperatorKey(), nextRDD);
-	}
+            rdds.put(physicalOperator.getOperatorKey(), nextRDD);
+        }
+    }
 
 	@Override
 	public void explain(PhysicalPlan pp, PigContext pc, PrintStream ps,
