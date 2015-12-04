@@ -585,6 +585,35 @@ public class MapReduceLauncher extends Launcher{
         return false;
     }
 
+    public void explain(MROperPlan mrp,PrintStream ps,
+                        String format,
+                        boolean verbose) throws IOException {
+        if (format.equals("text")) {
+            MRPrinter printer = new MRPrinter(ps, mrp);
+            printer.setVerbose(verbose);
+            printer.visit();
+        } else if (format.equals("xml")) {
+            try {
+                XMLMRPrinter printer = new XMLMRPrinter(ps, mrp);
+                printer.visit();
+                printer.closePlan();
+            } catch (ParserConfigurationException e) {
+                e.printStackTrace();
+            } catch (TransformerException e) {
+                e.printStackTrace();
+            }
+        } else {
+            ps.println("#--------------------------------------------------");
+            ps.println("# Map Reduce Plan                                  ");
+            ps.println("#--------------------------------------------------");
+
+            DotMRPrinter printer =new DotMRPrinter(mrp, ps);
+            printer.setVerbose(verbose);
+            printer.dump();
+            ps.println("");
+        }
+    }
+
     @Override
     public void explain(
             PhysicalPlan php,
@@ -686,7 +715,13 @@ public class MapReduceLauncher extends Launcher{
         NoopFilterRemover fRem = new NoopFilterRemover(plan);
         fRem.visit();
 
-        boolean isMultiQuery =
+
+        if (log.isDebugEnabled()) {
+            System.out.println("before multiquery optimization:");
+            explain(plan, System.out, "text", true);
+        }
+
+            boolean isMultiQuery =
             Boolean.valueOf(pc.getProperties().getProperty(PigConfiguration.PIG_OPT_MULTIQUERY, "true"));
 
         if (isMultiQuery) {
@@ -694,6 +729,11 @@ public class MapReduceLauncher extends Launcher{
             // by multi-query (multi-store) script.
             MultiQueryOptimizer mqOptimizer = new MultiQueryOptimizer(plan, pc.inIllustrator);
             mqOptimizer.visit();
+        }
+
+        if (log.isDebugEnabled()) {
+            System.out.println("after multiquery optimization:");
+            explain(plan, System.out, "text", true);
         }
 
         // removes unnecessary stores (as can happen with splits in

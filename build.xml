@@ -47,7 +47,7 @@
     <property name="docs.dir" value="${basedir}/src/docs" />
     <property name="legacy.dir" value="${basedir}/legacy" />
 
-
+   <property name="target.report.dir" value="${basedir}/report"/>
     <!-- build properties -->
     <property name="build.dir" value="${basedir}/build" />
     <property name="build.classes" value="${build.dir}/classes" />
@@ -1679,8 +1679,8 @@
      </target>
 
      <target name="ivy-download" description="To download ivy" unless="offline">
-        <setproxy proxyhost="child-prc.intel.com" proxyport="913"/>
-        <get src="${ivy_repo_url}" dest="${ivy.jar}" usetimestamp="true"/>
+        <!--<setproxy proxyhost="child-prc.intel.com" proxyport="913"/>
+        <get src="${ivy_repo_url}" dest="${ivy.jar}" usetimestamp="true"/>-->
      </target>
 
      <!--
@@ -1713,7 +1713,7 @@
      <target name="ivy-resolve" depends="ivy-init" unless="ivy.resolved" description="Resolve Ivy dependencies">
         <setproxy proxyhost="child-prc.intel.com" proxyport="913"/>
        <property name="ivy.resolved" value="true"/>
-       <ivy:resolve log="${loglevel}" settingsRef="${ant.project.name}.ivy.settings" conf="compile"/>
+       <!--<ivy:resolve log="${loglevel}" settingsRef="${ant.project.name}.ivy.settings" conf="compile"/>-->
      </target>
 
      <target name="ivy-compile" depends="ivy-resolve" description="Retrieve Ivy-managed artifacts for compile configuration">
@@ -1825,5 +1825,33 @@
      </target>
 
      <import file="./build-site.xml" optional="true"/>
-
+<target name="report" depends="test">
+        <delete dir="${test.log.dir}/html"/>
+<mkdir dir="${test.log.dir}/html" />
+<junitreport todir="${test.log.dir}">
+<fileset dir="${test.log.dir}">
+<include name="TEST-*.xml" />
+</fileset>
+<report todir="${test.log.dir}/html" />
+</junitreport>
+</target>
+<target name="report-sparktest" depends="test-spark">
+        <delete dir="${test.log.dir}/html"/>
+<mkdir dir="${test.log.dir}/html" />
+<junitreport todir="${test.log.dir}">
+<fileset dir="${test.log.dir}">
+<include name="TEST-*.xml" />
+</fileset>
+<report todir="${test.log.dir}/html" />
+</junitreport>
+</target>
+<target name="report-collect">
+<mkdir dir="${test.log.dir}/html" />
+<junitreport todir="${test.log.dir}">
+<fileset dir="${test.log.dir}">
+<include name="TEST-*.xml" />
+</fileset>
+<report todir="${test.log.dir}/html" />
+</junitreport>
+</target>
 </project>
