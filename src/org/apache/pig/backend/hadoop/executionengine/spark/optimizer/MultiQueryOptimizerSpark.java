@@ -20,6 +20,8 @@ package org.apache.pig.backend.hadoop.executionengine.spark.optimizer;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLoad;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POSplit;
@@ -38,6 +40,9 @@ import org.apache.pig.impl.plan.VisitorException;
  * MultiQueryOptimizer for spark
  */
 public class MultiQueryOptimizerSpark extends SparkOpPlanVisitor {
+
+    private static final Log LOG = LogFactory.getLog(MultiQueryOptimizerSpark.class);
+
     private String scope;
     private NodeIdGenerator nig;
 
@@ -104,6 +109,7 @@ public class MultiQueryOptimizerSpark extends SparkOpPlanVisitor {
                 POStore poStore = null;
                 if (firstNodeLeaf != null && firstNodeLeaf instanceof POStore) {
                     poStore = (POStore) firstNodeLeaf;
+                    PhysicalOperator predOfPoStore = sparkOp.physicalPlan.getPredecessors(poStore).get(0);
                     sparkOp.physicalPlan.remove(poStore); // remove  unnecessary store
                     POSplit split = getSplit();
                     ArrayList<SparkOperator> spliteesCopy = new ArrayList
@@ -114,7 +120,14 @@ public class MultiQueryOptimizerSpark extends SparkOpPlanVisitor {
                             if (firstNodeRoots.get(i) instanceof POLoad) {
                                 POLoad poLoad = (POLoad) firstNodeRoots.get(i);
                                 if (poLoad.getLFile().getFileName().equals(poStore.getSFile().getFileName())) {
+                                    List<PhysicalOperator> successorOfPoLoads = splitee.physicalPlan.getSuccessors(poLoad);
+                                    List<PhysicalOperator> successorofPoLoadsCopy = new ArrayList<PhysicalOperator>(successorOfPoLoads);
                                     splitee.physicalPlan.remove(poLoad);  // remove  unnecessary load
+                                    for (PhysicalOperator successorOfPoLoad : successorofPoLoadsCopy) {
+                                        sparkOp.addMultiQueryOptimizeConnectionItem(successorOfPoLoad.getOperatorKey(), predOfPoStore.getOperatorKey());
+                                        LOG.debug(String.format("add multiQueryOptimize connection item: to:%s, from:%s for %s",
+                                                successorOfPoLoad.toString(), predOfPoStore.getOperatorKey().toString(), splitee.getOperatorKey()));
+                                    }
                                     split.addPlan(splitee.physicalPlan);
                                     addSubPlanPropertiesToParent(sparkOp, splitee);
                                     removeSplittee(getPlan(), sparkOp, splitee);

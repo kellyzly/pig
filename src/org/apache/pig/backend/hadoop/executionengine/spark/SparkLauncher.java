@@ -561,7 +561,7 @@ public class SparkLauncher extends Launcher {
         addUDFJarsToSparkJobWorkingDirectory(sparkOperator);
         List<SparkOperator> predecessors = sparkPlan
                 .getPredecessors(sparkOperator);
-        List<RDD<Tuple>> predecessorRDDs = Lists.newArrayList();
+        Set<OperatorKey> predecessorOfPreviousSparkOp = new HashSet<OperatorKey>();
         if (predecessors != null) {
             for (SparkOperator pred : predecessors) {
                 if (sparkOpRdds.get(pred.getOperatorKey()) == null) {
@@ -569,7 +569,7 @@ public class SparkLauncher extends Launcher {
                             physicalOpRdds, convertMap, seenJobIDs, sparkStats,
                             conf);
                 }
-                predecessorRDDs.add(sparkOpRdds.get(pred.getOperatorKey()));
+                predecessorOfPreviousSparkOp.add(pred.getOperatorKey());
             }
         }
 
@@ -582,8 +582,8 @@ public class SparkLauncher extends Launcher {
         }
         for (PhysicalOperator leafPO : leafPOs) {
             try {
-                physicalToRDD(sparkOperator.physicalPlan, leafPO, physicalOpRdds,
-                        predecessorRDDs, convertMap);
+                physicalToRDD(sparkOperator, sparkOperator.physicalPlan, leafPO, physicalOpRdds,
+                        predecessorOfPreviousSparkOp, convertMap);
                 sparkOpRdds.put(sparkOperator.getOperatorKey(),
                         physicalOpRdds.get(leafPO.getOperatorKey()));
             } catch (Exception e) {
@@ -614,33 +614,37 @@ public class SparkLauncher extends Launcher {
         }
     }
 
-    private void physicalToRDD(PhysicalPlan plan,
+    private void physicalToRDD(SparkOperator sparkOperator, PhysicalPlan plan,
                                PhysicalOperator physicalOperator,
                                Map<OperatorKey, RDD<Tuple>> rdds,
-                               List<RDD<Tuple>> rddsFromPredeSparkOper,
+                               Set<OperatorKey> predsFromPreviousSparkOper,
                                Map<Class<? extends PhysicalOperator>, RDDConverter> convertMap)
             throws IOException {
         RDD<Tuple> nextRDD = null;
-        List<PhysicalOperator> predecessors = plan
+        List<PhysicalOperator> predecessorsOfCurrentSparkOp = plan
                 .getPredecessors(physicalOperator);
-        if (predecessors != null && predecessors.size() > 1) {
-            Collections.sort(predecessors);
+        if (predecessorsOfCurrentSparkOp != null && predecessorsOfCurrentSparkOp.size() > 1) {
+            Collections.sort(predecessorsOfCurrentSparkOp);
         }
 
-        List<RDD<Tuple>> predecessorRdds = Lists.newArrayList();
-        if (predecessors != null) {
-            for (PhysicalOperator predecessor : predecessors) {
-                physicalToRDD(plan, predecessor, rdds, rddsFromPredeSparkOper,
+        Set<OperatorKey> operatorKeysOfAllPreds = new HashSet<OperatorKey>();
+        addPredsFromPrevoiousSparkOp(sparkOperator, physicalOperator, operatorKeysOfAllPreds);
+        if (predecessorsOfCurrentSparkOp != null) {
+            for (PhysicalOperator predecessor : predecessorsOfCurrentSparkOp) {
+                physicalToRDD(sparkOperator, plan, predecessor, rdds, predsFromPreviousSparkOper,
                         convertMap);
-                predecessorRdds.add(rdds.get(predecessor.getOperatorKey()));
+                operatorKeysOfAllPreds.add(predecessor.getOperatorKey());
             }
 
         } else {
-            if (rddsFromPredeSparkOper != null
-                    && rddsFromPredeSparkOper.size() > 0) {
-                predecessorRdds.addAll(rddsFromPredeSparkOper);
+            if (predsFromPreviousSparkOper != null
+                    && predsFromPreviousSparkOper.size() > 0) {
+                for (OperatorKey predFromPreviousSparkOper : predsFromPreviousSparkOper) {
+                    operatorKeysOfAllPreds.add(predFromPreviousSparkOper);
+                }
             }
         }
+
 
         if (physicalOperator instanceof POSplit) {
             List<PhysicalPlan> successorPlans = ((POSplit) physicalOperator).getPlans();
@@ -651,7 +655,7 @@ public class SparkLauncher extends Launcher {
                     break;
                 }
                 PhysicalOperator leafOfSuccessPlan = leavesOfSuccessPlan.get(0);
-                physicalToRDD(successPlan, leafOfSuccessPlan, rdds, predecessorRdds, convertMap);
+                physicalToRDD(sparkOperator, successPlan, leafOfSuccessPlan, rdds, operatorKeysOfAllPreds, convertMap);
             }
         } else {
             RDDConverter converter = convertMap.get(physicalOperator.getClass());
@@ -663,7 +667,8 @@ public class SparkLauncher extends Launcher {
             LOG.info("Converting operator "
                     + physicalOperator.getClass().getSimpleName() + " "
                     + physicalOperator);
-            nextRDD = converter.convert(predecessorRdds, physicalOperator);
+            List<RDD<Tuple>> allPredRDDs = sortPredecessorRDDs(operatorKeysOfAllPreds, rdds);
+            nextRDD = converter.convert(allPredRDDs, physicalOperator);
 
             if (nextRDD == null) {
                 throw new IllegalArgumentException(
@@ -672,6 +677,29 @@ public class SparkLauncher extends Launcher {
             }
 
             rdds.put(physicalOperator.getOperatorKey(), nextRDD);
+        }
+    }
+
+    //get all rdds of predecessors sorted by the OperatorKey
+    private List<RDD<Tuple>> sortPredecessorRDDs(Set<OperatorKey> operatorKeysOfAllPreds, Map<OperatorKey, RDD<Tuple>> rdds) {
+        List<RDD<Tuple>> predecessorRDDs = Lists.newArrayList();
+        List<OperatorKey> operatorKeyOfAllPreds = Lists.newArrayList(operatorKeysOfAllPreds);
+        Collections.sort(operatorKeyOfAllPreds);
+        for (OperatorKey operatorKeyOfAllPred : operatorKeyOfAllPreds) {
+            predecessorRDDs.add(rdds.get(operatorKeyOfAllPred));
+        }
+        return predecessorRDDs;
+    }
+
+    //deal cases like FR+Limit when enables multiquery(see PIG-4675
+    private void addPredsFromPrevoiousSparkOp(SparkOperator sparkOperator, PhysicalOperator physicalOperator, Set<OperatorKey> operatorKeyOfPredecessors) {
+        // the relationship is stored in sparkOperator.getMultiQueryOptimizeConnectionItem()
+        List<OperatorKey> predOperatorKeys = sparkOperator.getMultiQueryOptimizeConnectionItem().get(physicalOperator.getOperatorKey());
+        if (predOperatorKeys != null) {
+            for (OperatorKey predOperator : predOperatorKeys) {
+                LOG.debug(String.format("add predecessor(OperatorKey:%s) for OperatorKey:%s", predOperator, physicalOperator.getOperatorKey()));
+                operatorKeyOfPredecessors.add(predOperator);
+            }
         }
     }
 
