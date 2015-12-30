@@ -98,7 +98,7 @@
     <property name="test.build.classes" value="${test.build.dir}/classes" />
     <property name="test.log.dir" value="${test.build.dir}/logs" />
     <property name="test.timeout" value="7200000" />
-    <property name="test.junit.output.format" value="plain" />
+    <property name="test.junit.output.format" value="xml" />
     <property name="test.commit.file" value="${test.src.dir}/commit-tests"/>
     <property name="test.unit.file" value="${test.src.dir}/unit-tests"/>
     <property name="test.smoke.file" value="${test.src.dir}/smoke-tests"/>
@@ -120,7 +120,7 @@
     <!-- test configuration, use ${user.home}/build.properties to configure values  -->
     <property name="ssh.gateway" value="" />
     <property name="hod.server" value="" />
-    <property name="test.output" value="no"/>
+    <property name="test.output" value="yes"/>
 
     <!-- e2e test properties -->
     <property name="test.e2e.dir" value="${basedir}/test/e2e/pig"/>
@@ -1682,6 +1682,7 @@
      </target>
 
      <target name="ivy-download" description="To download ivy" unless="offline">
+        <setproxy proxyhost="child-prc.intel.com" proxyport="913"/>
         <get src="${ivy_repo_url}" dest="${ivy.jar}" usetimestamp="true"/>
      </target>
 
@@ -1713,6 +1714,7 @@
      </target>
 
      <target name="ivy-resolve" depends="ivy-init" unless="ivy.resolved" description="Resolve Ivy dependencies">
+        <setproxy proxyhost="child-prc.intel.com" proxyport="913"/>
        <property name="ivy.resolved" value="true"/>
        <ivy:resolve log="${loglevel}" settingsRef="${ant.project.name}.ivy.settings" conf="compile"/>
      </target>

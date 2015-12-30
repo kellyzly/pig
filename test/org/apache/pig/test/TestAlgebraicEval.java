@@ -40,7 +40,7 @@ public class TestAlgebraicEval {
     private static Properties properties;
     private static MiniGenericCluster cluster;
 
-    private int LOOP_COUNT = 1024;
+    private int LOOP_COUNT = 10;
     private Boolean[] nullFlags = new Boolean[]{ false, true};
 
     @Before
