@@ -111,6 +111,9 @@ public class POSort extends PhysicalOperator {
             mComparator = new UDFSortComparator();
 			isUDFComparatorUsed = true;
 		}
+        log.info("POSort has been initialized, ExprOutputTypes is:"+(ExprOutputTypes==null?
+                " is null":" is not null"));
+
 	}
 
 	public POSort(OperatorKey k, int rp, List inp) {
@@ -149,6 +152,7 @@ public class POSort extends PhysicalOperator {
 			for(PhysicalPlan plan : sortPlans) {
 				try {
 					plan.attachInput(o1);
+                    log.info("ExprOutputTypes:"+(ExprOutputTypes==null?"null":" is not null"));
 					Result res1 = getResult(plan, ExprOutputTypes.get(count));
 					plan.attachInput(o2);
 					Result res2 = getResult(plan, ExprOutputTypes.get(count));
