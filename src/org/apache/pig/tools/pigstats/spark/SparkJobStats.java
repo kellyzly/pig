@@ -21,13 +21,11 @@ package org.apache.pig.tools.pigstats.spark;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLoad;
 import scala.Option;
-
-import com.google.common.collect.Maps;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.mapred.Counters;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLoad;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStore;
 import org.apache.pig.backend.hadoop.executionengine.spark.JobMetricsListener;
 import org.apache.pig.backend.hadoop.executionengine.spark.plan.SparkOperator;
@@ -38,15 +36,23 @@ import org.apache.pig.tools.pigstats.JobStats;
 import org.apache.pig.tools.pigstats.OutputStats;
 import org.apache.pig.tools.pigstats.PigStats;
 
+import org.apache.pig.tools.pigstats.mapreduce.MRPigStatsUtil;
 import org.apache.spark.executor.ShuffleReadMetrics;
 import org.apache.spark.executor.ShuffleWriteMetrics;
 import org.apache.spark.executor.TaskMetrics;
+
+import com.google.common.collect.Maps;
 
 public class SparkJobStats extends JobStats {
 
     private int jobId;
     private Map<String, Long> stats = Maps.newLinkedHashMap();
     private boolean disableCounter;
+    private Counters counters = null;
+    public static String FS_COUNTER_GROUP = "FS_GROUP";
+    public static String TASK_COUNTER_GROUP = "TASK_GROUP";
+    public static String INPUT_RECORDS = "INPUT_RECORDS";
+    public static String OUTPUT_RECORDS = "OUTPUT_RECORD";
 
     protected SparkJobStats(int jobId, PigStats.JobGraph plan, Configuration conf) {
         this(String.valueOf(jobId), plan, conf);
@@ -61,6 +67,7 @@ public class SparkJobStats extends JobStats {
     public void setConf(Configuration conf) {
         super.setConf(conf);
         disableCounter = conf.getBoolean("pig.disable.counter", false);
+        initializeHadoopCounter();
     }
 
     public void addOutputInfo(POStore poStore, boolean success,
@@ -124,6 +131,8 @@ public class SparkJobStats extends JobStats {
         long diskBytesSpilled = 0;
         long bytesRead = 0;
         long bytesWritten = 0;
+        long recordRead = 0;
+        long recordWritten = 0;
         long remoteBlocksFetched = 0;
         long localBlocksFetched = 0;
         long fetchWaitTime = 0;
@@ -149,11 +158,13 @@ public class SparkJobStats extends JobStats {
                         if (!taskMetrics.inputMetrics().isEmpty()) {
                             inputMetricExist = true;
                             bytesRead += taskMetrics.inputMetrics().get().bytesRead();
+                            recordRead += taskMetrics.inputMetrics().get().recordsRead();
                         }
 
                         if (!taskMetrics.outputMetrics().isEmpty()) {
                             outputMetricExist = true;
                             bytesWritten += taskMetrics.outputMetrics().get().bytesWritten();
+                            recordWritten += taskMetrics.outputMetrics().get().recordsWritten();
                         }
 
                         Option<ShuffleReadMetrics> shuffleReadMetricsOption = taskMetrics.shuffleReadMetrics();
@@ -186,10 +197,16 @@ public class SparkJobStats extends JobStats {
         results.put("DiskBytesSpilled", diskBytesSpilled);
         if (inputMetricExist) {
             results.put("BytesRead", bytesRead);
+            hdfsBytesRead = bytesRead;
+            counters.incrCounter(FS_COUNTER_GROUP, MRPigStatsUtil.HDFS_BYTES_READ, hdfsBytesRead);
+            counters.incrCounter(TASK_COUNTER_GROUP, INPUT_RECORDS, recordRead);
         }
 
         if (outputMetricExist) {
             results.put("BytesWritten", bytesWritten);
+            hdfsBytesWritten = bytesWritten;
+            counters.incrCounter(FS_COUNTER_GROUP, MRPigStatsUtil.HDFS_BYTES_WRITTEN, hdfsBytesWritten);
+            counters.incrCounter(TASK_COUNTER_GROUP, OUTPUT_RECORDS, recordWritten);
         }
 
         if (shuffleReadMetricExist) {
@@ -300,7 +317,7 @@ public class SparkJobStats extends JobStats {
 
     @Override
     public Counters getHadoopCounters() {
-        throw new UnsupportedOperationException();
+        return counters;
     }
 
     @Override
@@ -319,5 +336,16 @@ public class SparkJobStats extends JobStats {
         annotate(ALIAS, sparkScriptInfo.getAlias(sparkOperator));
         annotate(ALIAS_LOCATION, sparkScriptInfo.getAliasLocation(sparkOperator));
         annotate(FEATURE, sparkScriptInfo.getPigFeatures(sparkOperator));
+    }
+
+    private void initializeHadoopCounter() {
+        counters = new Counters();
+        Counters.Group fsGrp = counters.addGroup(FS_COUNTER_GROUP, FS_COUNTER_GROUP);
+        fsGrp.addCounter(MRPigStatsUtil.HDFS_BYTES_READ, MRPigStatsUtil.HDFS_BYTES_READ, 0);
+        fsGrp.addCounter(MRPigStatsUtil.HDFS_BYTES_WRITTEN, MRPigStatsUtil.HDFS_BYTES_WRITTEN, 0);
+
+        Counters.Group taskGrp = counters.addGroup(TASK_COUNTER_GROUP, TASK_COUNTER_GROUP);
+        taskGrp.addCounter(INPUT_RECORDS, INPUT_RECORDS, 0);
+        taskGrp.addCounter(OUTPUT_RECORDS, OUTPUT_RECORDS, 0);
     }
 }

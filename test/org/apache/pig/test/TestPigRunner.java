@@ -52,6 +52,8 @@ import org.apache.pig.tools.pigstats.PigStats;
 import org.apache.pig.tools.pigstats.PigStatsUtil;
 import org.apache.pig.tools.pigstats.mapreduce.MRJobStats;
 import org.apache.pig.tools.pigstats.mapreduce.MRPigStatsUtil;
+import org.apache.pig.tools.pigstats.spark.SparkJobStats;
+
 import org.junit.AfterClass;
 import org.junit.Assume;
 import org.junit.Before;
@@ -975,6 +977,42 @@ public class TestPigRunner {
                         MRPigStatsUtil.HDFS_BYTES_WRITTEN).getValue());
                 assertEquals(30,counter.getGroup(FS_COUNTER_GROUP).getCounterForName(
                         MRPigStatsUtil.HDFS_BYTES_READ).getValue());
+            } else if (execType.equals("spark")) {
+                long input_records = 0;
+                long first_output_records = 0;
+                long second_output_records = 0;
+                long hdfs_bytes_read = 0;
+                long hdfs_bytes_written = 0;
+
+                //There are 2 spark jobs because of 2 POStore although the spark plan is optimized by multiquery optimization.
+                List<JobStats> jobs = stats.getJobGraph().getJobList();
+                JobStats firstJob = jobs.get(0);
+                JobStats secondJob = jobs.get(1);
+
+                //the input_records of two spark jobs are same(because the two spark jobs have same poLoad), we only
+                //use one of those to compare with expected input_records(5)
+                input_records += firstJob.getHadoopCounters().getGroup(SparkJobStats.TASK_COUNTER_GROUP).getCounterForName(
+                        SparkJobStats.INPUT_RECORDS).getValue();
+                first_output_records = firstJob.getHadoopCounters().getGroup(SparkJobStats.TASK_COUNTER_GROUP).getCounterForName(
+                        SparkJobStats.OUTPUT_RECORDS).getValue();
+                second_output_records = secondJob.getHadoopCounters().getGroup(SparkJobStats.TASK_COUNTER_GROUP).getCounterForName(
+                        SparkJobStats.OUTPUT_RECORDS).getValue();
+                assertEquals(5, input_records);
+                assertEquals(2, first_output_records);
+                assertEquals(2, second_output_records);
+
+                //the hdfs_bytes_read of two spark jobs are same(because the two spark jobs have same poLoad), we only
+                //use one of those to compare with expected hdfs_bytes_read(30)
+                //we count the hdfs_bytes_written of the two spark jobs to calculate the total hdfs_bytes_written
+                hdfs_bytes_read += firstJob.getHadoopCounters().getGroup(SparkJobStats.FS_COUNTER_GROUP).getCounterForName(
+                        PigStatsUtil.HDFS_BYTES_READ).getValue();
+                hdfs_bytes_written += firstJob.getHadoopCounters().getGroup(SparkJobStats.FS_COUNTER_GROUP).getCounterForName(
+                        PigStatsUtil.HDFS_BYTES_WRITTEN).getValue();
+                hdfs_bytes_written += secondJob.getHadoopCounters().getGroup(SparkJobStats.FS_COUNTER_GROUP).getCounterForName(
+                        PigStatsUtil.HDFS_BYTES_WRITTEN).getValue();
+
+                assertEquals(30, hdfs_bytes_read);
+                assertEquals(20, hdfs_bytes_written);
             } else {
                 Counters counter= ((MRJobStats)stats.getJobGraph().getSinks().get(0)).getHadoopCounters();
                 assertEquals(5, counter.getGroup(MRPigStatsUtil.TASK_COUNTER_GROUP).getCounterForName(

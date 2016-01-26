@@ -44,6 +44,7 @@ import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.serializer.Deserializer;
 import org.apache.hadoop.io.serializer.SerializationFactory;
 import org.apache.hadoop.io.serializer.Serializer;
+import org.apache.hadoop.mapreduce.lib.input.FileSplit;
 import org.apache.hadoop.mapreduce.InputFormat;
 import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.util.ReflectionUtils;
@@ -58,20 +59,25 @@ import org.apache.pig.impl.plan.OperatorKey;
  * the Configuration to create the SerializationFactory to deserialize the
  * wrapped InputSplit.
  */
-public class PigSplit extends InputSplit implements Writable, Configurable {
+/*
+   change PigSplit extends from InputSplit to FileSplit
+   to calculate the bytes_read info in spark mode.
+   More detail see PIG-4776
+ */
+public class PigSplit extends FileSplit implements Writable, Configurable {
     //The operators to which the tuples from this
     //input file are attached. These are the successors
     //of the load operator representing this input
     private ArrayList<OperatorKey> targetOps;
 
     // index starting from 0 representing the input number
-    // So if we have 3 inputs (say for a 3 way join), then the 
+    // So if we have 3 inputs (say for a 3 way join), then the
     // splits corresponding to the first input will have an index of 0, those
     // corresponding to the second will have an index of 1 and so on
     // This will be used to get the LoadFunc corresponding to the input
     // in PigInputFormat and related code.
     private int inputIndex;
-    
+
     // The real InputSplit this split is wrapping
     private InputSplit[] wrappedSplits;
 
@@ -80,36 +86,36 @@ public class PigSplit extends InputSplit implements Writable, Configurable {
     // This will be used by MergeJoinIndexer to record the split # in the
     // index
     private int splitIndex;
-    
+
     // index of current splits being process
     private int currentIdx;
-    
+
     // the flag indicates this is a multi-input join (i.e. join)
-    // so that custom Hadoop counters will be created in the 
+    // so that custom Hadoop counters will be created in the
     // back-end to track the number of records for each input.
     private boolean isMultiInputs = false;
-    
+
     // the flag indicates the custom Hadoop counter should be disabled.
     // This is to prevent the number of counters exceeding the limit.
     // This flag is controlled by Pig property "pig.disable.counter" (
     // the default value is 'false').
     private boolean disableCounter = false;
-    
+
     /**
      * the job Configuration
      */
     private Configuration conf;
-    
+
     /**
      * total number of splits - required by skew join
      */
     private int totalSplits;
-    
+
     /**
      * total length
      */
     private long length = -1;
-    
+
     /**
      * overall locations
      */
@@ -118,8 +124,8 @@ public class PigSplit extends InputSplit implements Writable, Configurable {
     // this seems necessary for Hadoop to instatiate this split on the
     // backend
     public PigSplit() {}
-    
-    public PigSplit(InputSplit[] wrappedSplits, int inputIndex, 
+
+    public PigSplit(InputSplit[] wrappedSplits, int inputIndex,
             List<OperatorKey> targetOps, int splitIndex) {
         this.wrappedSplits = wrappedSplits;
         this.inputIndex = inputIndex;
@@ -127,80 +133,93 @@ public class PigSplit extends InputSplit implements Writable, Configurable {
         this.splitIndex = splitIndex;
         this.currentIdx = 0;
     }
-    
+
     public List<OperatorKey> getTargetOps() {
         return new ArrayList<OperatorKey>(targetOps);
     }
-    
+
 
     /**
-     * This methods returns the actual InputSplit (as returned by the 
+     * This methods returns the actual InputSplit (as returned by the
      * {@link InputFormat}) which this class is wrapping.
      * @return the wrappedSplit
      */
     public InputSplit getWrappedSplit() {
         return wrappedSplits[currentIdx];
     }
-    
+
     /**
-     * 
+     *
      * @param idx the index into the wrapped splits
      * @return the specified wrapped split
      */
     public InputSplit getWrappedSplit(int idx) {
         return wrappedSplits[idx];
     }
-    
+
     @Override
     @SuppressWarnings("unchecked")
-    public String[] getLocations() throws IOException, InterruptedException {
-        if (locations == null) {
-            HashMap<String, Long> locMap = new HashMap<String, Long>();
-            Long lenInMap;
-            for (InputSplit split : wrappedSplits)
-            {
-                String[] locs = split.getLocations();
-                for (String loc : locs)
-                {
-                    if ((lenInMap = locMap.get(loc)) == null)
-                        locMap.put(loc, split.getLength());
-                    else
-                        locMap.put(loc, lenInMap + split.getLength());
+    public String[] getLocations() throws IOException {
+        try {
+            if (locations == null) {
+                HashMap<String, Long> locMap = new HashMap<String, Long>();
+                Long lenInMap;
+                for (InputSplit split : wrappedSplits) {
+                    String[] locs = new String[0];
+
+                    locs = split.getLocations();
+
+                    for (String loc : locs) {
+                        if ((lenInMap = locMap.get(loc)) == null)
+                            locMap.put(loc, split.getLength());
+                        else
+                            locMap.put(loc, lenInMap + split.getLength());
+                    }
+                }
+                Set<Map.Entry<String, Long>> entrySet = locMap.entrySet();
+                Map.Entry<String, Long>[] hostSize =
+                        entrySet.toArray(new Map.Entry[entrySet.size()]);
+                Arrays.sort(hostSize, new Comparator<Map.Entry<String, Long>>() {
+
+                    @Override
+                    public int compare(Entry<String, Long> o1, Entry<String, Long> o2) {
+                        long diff = o1.getValue() - o2.getValue();
+                        if (diff < 0) return 1;
+                        if (diff > 0) return -1;
+                        return 0;
+                    }
+                });
+                // maximum 5 locations are in list: refer to PIG-1648 for more details
+                int nHost = Math.min(hostSize.length, 5);
+                locations = new String[nHost];
+                for (int i = 0; i < nHost; ++i) {
+                    locations[i] = hostSize[i].getKey();
                 }
             }
-            Set<Map.Entry<String, Long>> entrySet = locMap.entrySet();
-            Map.Entry<String, Long>[] hostSize =
-                entrySet.toArray(new Map.Entry[entrySet.size()]);
-            Arrays.sort(hostSize, new Comparator<Map.Entry<String, Long>>() {
-
-              @Override
-              public int compare(Entry<String, Long> o1, Entry<String, Long> o2) {
-                long diff = o1.getValue() - o2.getValue();
-                if (diff < 0) return 1;
-                if (diff > 0) return -1;
-                return 0;
-              }
-            });
-            // maximum 5 locations are in list: refer to PIG-1648 for more details
-            int nHost = Math.min(hostSize.length, 5);
-            locations = new String[nHost];
-            for (int i = 0; i < nHost; ++i) {
-              locations[i] = hostSize[i].getKey();
-            }
+            return locations;
+        } catch (InterruptedException e) {
+            throw new RuntimeException("PigSplit#getLocations() throws exception: ", e);
         }
-        return locations;
     }
 
     @Override
-    public long getLength() throws IOException, InterruptedException {
-        if (length == -1) {
-            length = 0;
-            for (int i = 0; i < wrappedSplits.length; i++)
-                length += wrappedSplits[i].getLength();
+    public long getLength() {
+        try {
+            if (length == -1) {
+                length = 0;
+                for (int i = 0; i < wrappedSplits.length; i++)
+
+                    length += wrappedSplits[i].getLength();
+
+            }
+            return length;
+        } catch (IOException e) {
+            throw new RuntimeException("PigSplit#getLength() exception: ", e);
+        } catch (InterruptedException e) {
+            throw new RuntimeException("PigSplit#getLength() exception: ", e);
         }
-        return length;
     }
-    
+
     /**
      * Return the length of a wrapped split
      * @param idx the index into the wrapped splits
@@ -323,7 +342,7 @@ public class PigSplit extends InputSplit implements Writable, Configurable {
     public void setMultiInputs(boolean b) {
         isMultiInputs = b;
     }
-    
+
     /**
      * Returns true if the map has multiple inputs, else false
      * @return true if the map has multiple inputs, else false
@@ -331,7 +350,7 @@ public class PigSplit extends InputSplit implements Writable, Configurable {
     public boolean isMultiInputs() {
         return isMultiInputs;
     }
-    
+
     @Override
     public Configuration getConf() {
         return conf;
@@ -340,20 +359,20 @@ public class PigSplit extends InputSplit implements Writable, Configurable {
 
     /** (non-Javadoc)
      * @see org.apache.hadoop.conf.Configurable#setConf(org.apache.hadoop.conf.Configuration)
-     * 
-     * This will be called by 
+     *
+     * This will be called by
      * {@link PigInputFormat#getSplits(org.apache.hadoop.mapreduce.JobContext)}
-     * to be used in {@link #write(DataOutput)} for serializing the 
+     * to be used in {@link #write(DataOutput)} for serializing the
      * wrappedSplit
-     * 
-     * This will be called by Hadoop in the backend to set the right Job 
+     *
+     * This will be called by Hadoop in the backend to set the right Job
      * Configuration (hadoop will invoke this method because PigSplit implements
      * {@link Configurable} - we need this Configuration in readFields() to
-     * deserialize the wrappedSplit 
+     * deserialize the wrappedSplit
      */
     @Override
     public void setConf(Configuration conf) {
-        this.conf = conf;        
+        this.conf = conf;
     }
 
     // package level access because we don't want LoadFunc implementations
@@ -362,9 +381,9 @@ public class PigSplit extends InputSplit implements Writable, Configurable {
     int getInputIndex() {
         return inputIndex;
     }
-    
+
     /**
-     * 
+     *
      * @return the number of wrapped splits
      */
     public int getNumPaths() {
@@ -402,7 +421,7 @@ public class PigSplit extends InputSplit implements Writable, Configurable {
                     wrappedSplits[i].getClass().getName() + "\n   Locations:\n");
                 for (String location :  wrappedSplits[i].getLocations())
                     st.append("    "+location+"\n");
-                st.append("\n-----------------------\n"); 
+                st.append("\n-----------------------\n");
           }
         } catch (IOException e) {
           return null;
@@ -419,7 +438,7 @@ public class PigSplit extends InputSplit implements Writable, Configurable {
     public boolean disableCounter() {
         return disableCounter;
     }
-    
+
     public void setCurrentIdx(int idx) {
         this.currentIdx = idx;
     }
