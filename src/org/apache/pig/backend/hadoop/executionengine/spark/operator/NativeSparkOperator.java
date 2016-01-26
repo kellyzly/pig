@@ -51,7 +51,7 @@ public class NativeSparkOperator extends SparkOperator {
         return jobId;
     }
 
-    public void runJob() throws JobCreationException {
+    public void runJob() {
         RunJarSecurityManager secMan = new RunJarSecurityManager();
         try {
             RunJar.main(getNativeMRParams());
@@ -59,7 +59,8 @@ public class NativeSparkOperator extends SparkOperator {
         } catch (SecurityException se) {   //java.lang.reflect.InvocationTargetException
             if (secMan.getExitInvoked()) {
                 if (secMan.getExitCode() != 0) {
-                    throw new JobCreationException("Native job returned with non-zero return code");
+                    JobCreationException e = new JobCreationException("Native job returned with non-zero return code");
+                    SparkStatsUtil.addFailedNativeJobStats(PigStats.get(), this, e);
                 } else {
                     SparkStatsUtil.addNativeJobStats(PigStats.get(), this);
                 }
@@ -68,7 +69,6 @@ public class NativeSparkOperator extends SparkOperator {
             JobCreationException e = new JobCreationException(
                     "Cannot run native spark job " + t.getMessage(), t);
             SparkStatsUtil.addFailedNativeJobStats(PigStats.get(), this, e);
-            throw e;
         } finally {
             secMan.retire();
         }
