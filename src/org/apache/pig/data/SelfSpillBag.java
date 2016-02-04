@@ -17,6 +17,7 @@
  */
 package org.apache.pig.data;
 
+import java.io.Serializable;
 import org.apache.pig.PigConfiguration;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigMapReduce;
 import org.apache.pig.classification.InterfaceAudience;
@@ -51,7 +52,7 @@ public abstract class SelfSpillBag extends DefaultAbstractBag {
      */
     @InterfaceAudience.Private
     @InterfaceStability.Evolving
-    public static class MemoryLimits {
+    public static class MemoryLimits implements Serializable{
 
         private long maxMemUsage;
         private long cacheLimit = Integer.MAX_VALUE;
