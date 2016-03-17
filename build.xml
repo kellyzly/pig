@@ -929,6 +929,14 @@
         <fail if="test-spark.failed">Tests failed!</fail>
      </target>
 
+<!--  
+      ant -DtestClass=org.apache.pig.test.TestNativeMapReduce -DtestMethods=testNativeMRJobSimple -Dhadoopversion=23 test-spark-single
+      -->
+   <target name="test-spark-single" depends="setSparkEnv,setWindowsPath,setLinuxPath,compile-test,jar,debugger.check,jackson-pig-3039-test-download" description="Run single spark unit test in Spark local mode">
+    <!--<target name="test-spark-single" depends="setSparkEnv" description="Run single spark unit test in Spark local mode">  -->
+        <macro-test-single tests.failed="test-spark.failed" testClass="${testClass}" testMethods="${testMethods}"/>
+        <fail if="test-spark.failed">Tests failed!</fail>
+    </target>
 
     <target name="debugger.check" depends="debugger.set,debugger.unset"/>
     <target name="debugger.set" if="debugPort">
@@ -938,6 +946,52 @@
     <target name="debugger.unset" unless="debugPort">
         <property name="debugArgs" value=""/>
     </target>
+    <macrodef name="macro-test-single">
+        <attribute name="testClass" />
+        <attribute name="testMethods" />
+        <attribute name="tests.failed" />
+        <sequential>
+            <delete dir="${test.log.dir}"/>
+            <mkdir dir="${test.log.dir}"/>
+            <tempfile property="junit.tmp.dir" prefix="pig_junit_tmp" destDir="${java.io.tmpdir}" />
+            <mkdir dir="${junit.tmp.dir}/"/>
+            <propertycopy name="test.exclude.file.for.exectype" from="test.exclude.file.${test.exec.type}"/>
+            <echo>Tests in ${test.exclude.file.for.exectype} will be excluded</echo>
+            <junit showoutput="${test.output}" printsummary="yes" haltonfailure="no" fork="yes" maxmemory="2048m" dir="${basedir}" timeout="${test.timeout}" errorProperty="@{tests.failed}" failureProperty="@{tests.failed}">
+                <sysproperty key="hadoopversion" value="${hadoopversion}" />
+                <sysproperty key="test.exec.type" value="${test.exec.type}" />
+                <sysproperty key="ssh.gateway" value="${ssh.gateway}" />
+                <sysproperty key="hod.server" value="${hod.server}" />
+                <sysproperty key="java.io.tmpdir" value="${junit.tmp.dir}" />
+                <sysproperty key="hadoop.log.dir" value="${test.log.dir}"/>
+                <jvmarg line="-XX:+CMSClassUnloadingEnabled -XX:MaxPermSize=128M ${debugArgs} -Djava.library.path=${hadoop.root}\bin"/>
+                <sysproperty key="java.security.krb5.realm" value="" />
+                <sysproperty key="java.security.krb5.kdc" value="" />
+                <sysproperty key="log4j.configuration" value="file:${basedir}/conf/test-log4j.properties"/>
+                <env key="MALLOC_ARENA_MAX" value="4"/>
+                <env key="PATH" path="${build.path}"/>
+                <classpath>
+                    <pathelement location="${output.jarfile.core}" />
+                    <fileset dir="lib">
+                        <include name="**/*.jar"/>
+                    </fileset>
+                    <pathelement location="${test.build.classes}" />
+                    <pathelement location="." />
+                    <pathelement path="${clover.jar}"/>
+                    <path refid="test.classpath"/>
+                </classpath>
+                <formatter type="${test.junit.output.format}" />
+
+
+                <test fork="yes" todir="${test.log.dir}" name="${testClass}" methods="${testMethods}" ></test>
+                <assertions>
+                    <enable />
+                </assertions>
+
+            </junit>
+            <delete dir="${junit.tmp.dir}/"/>
+        </sequential>
+    </macrodef>
 
     <macrodef name="macro-test-runner">
       <attribute name="test.file" />
@@ -996,6 +1050,9 @@
                 <enable />
             </assertions>
 
+            <!--<test fork="yes" todir="${test.log.dir}" name="${testname}" methods="${method}" if="${testmethod}">
+
+            </test>    -->
         </junit>
         <delete dir="${junit.tmp.dir}/"/>
       </sequential>
@@ -1674,8 +1731,8 @@
      </target>
 
      <target name="ivy-download" description="To download ivy" unless="offline">
-        <setproxy proxyhost="child-prc.intel.com" proxyport="913"/>
-        <get src="${ivy_repo_url}" dest="${ivy.jar}" usetimestamp="true"/>
+        <!--<setproxy proxyhost="child-prc.intel.com" proxyport="913"/>
+        <get src="${ivy_repo_url}" dest="${ivy.jar}" usetimestamp="true"/>-->
      </target>
 
      <!--
@@ -1706,9 +1763,9 @@
      </target>
 
      <target name="ivy-resolve" depends="ivy-init" unless="ivy.resolved" description="Resolve Ivy dependencies">
-        <setproxy proxyhost="child-prc.intel.com" proxyport="913"/>
+      <!--  <setproxy proxyhost="child-prc.intel.com" proxyport="913"/>
        <property name="ivy.resolved" value="true"/>
-       <ivy:resolve log="${loglevel}" settingsRef="${ant.project.name}.ivy.settings" conf="compile"/>
+       <ivy:resolve log="${loglevel}" settingsRef="${ant.project.name}.ivy.settings" conf="compile"/>-->
      </target>
 
      <target name="ivy-compile" depends="ivy-resolve" description="Retrieve Ivy-managed artifacts for compile configuration">
@@ -1760,8 +1817,9 @@
      </target>
 
      <target name="jackson-pig-3039-test-download" description="To download jackson" unless="offline">
+        <!--<setproxy proxyhost="child-prc.intel.com" proxyport="913"/>
         <get src="${jackson_core_repo_url}" dest="${jackson_core.jar}" usetimestamp="true"/>
-        <get src="${jackson_mapper_repo_url}" dest="${jackson_mapper.jar}" usetimestamp="true"/>
+        <get src="${jackson_mapper_repo_url}" dest="${jackson_mapper.jar}" usetimestamp="true"/>-->
      </target>
 
      <target name="jackson-pig-3039-test-clean" description="Clean the jackson jar files">
