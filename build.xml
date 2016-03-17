@@ -932,9 +932,9 @@
 <!--  
       ant -DtestClass=org.apache.pig.test.TestNativeMapReduce -DtestMethods=testNativeMRJobSimple -Dhadoopversion=23 test-spark-single
       -->
-   <target name="test-spark-single" depends="setSparkEnv,setWindowsPath,setLinuxPath,compile-test,jar,debugger.check,jackson-pig-3039-test-download" description="Run single spark unit test in Spark local mode">
-    <!--<target name="test-spark-single" depends="setSparkEnv" description="Run single spark unit test in Spark local mode">  -->
-        <macro-test-single tests.failed="test-spark.failed" testClass="${testClass}" testMethods="${testMethods}"/>
+ <target name="test-spark-single" depends="setSparkEnv,setWindowsPath,setLinuxPath,compile-test,jar,debugger.check,jackson-pig-3039-test-download" description="Run single spark unit test in Spark local mode">
+    <!--<target name="test-spark-single" depends="setSparkEnv" description="Run single spark unit test in Spark local mode"> -->
+        <macro-test-single tests.failed="test-spark.failed" testClass="${testClass}" testMethods="${testMethods}" single="${single}"/>
         <fail if="test-spark.failed">Tests failed!</fail>
     </target>
 
@@ -950,6 +950,7 @@
         <attribute name="testClass" />
         <attribute name="testMethods" />
         <attribute name="tests.failed" />
+        <attribute name="single" />
         <sequential>
             <delete dir="${test.log.dir}"/>
             <mkdir dir="${test.log.dir}"/>
@@ -983,7 +984,8 @@
                 <formatter type="${test.junit.output.format}" />
 
 
-                <test fork="yes" todir="${test.log.dir}" name="${testClass}" methods="${testMethods}" ></test>
+                <test fork="yes" todir="${test.log.dir}" name="${testClass}" methods="${testMethods}" if="${single}" ></test>
+                <test fork="yes" todir="${test.log.dir}" name="${testClass}" unless="${single}" ></test>
                 <assertions>
                     <enable />
                 </assertions>
@@ -1731,8 +1733,8 @@
      </target>
 
      <target name="ivy-download" description="To download ivy" unless="offline">
-        <!--<setproxy proxyhost="child-prc.intel.com" proxyport="913"/>
-        <get src="${ivy_repo_url}" dest="${ivy.jar}" usetimestamp="true"/>-->
+        <setproxy proxyhost="child-prc.intel.com" proxyport="913"/>
+        <get src="${ivy_repo_url}" dest="${ivy.jar}" usetimestamp="true"/>
      </target>
 
      <!--
@@ -1763,9 +1765,9 @@
      </target>
 
      <target name="ivy-resolve" depends="ivy-init" unless="ivy.resolved" description="Resolve Ivy dependencies">
-      <!--  <setproxy proxyhost="child-prc.intel.com" proxyport="913"/>
+        <setproxy proxyhost="child-prc.intel.com" proxyport="913"/>
        <property name="ivy.resolved" value="true"/>
-       <ivy:resolve log="${loglevel}" settingsRef="${ant.project.name}.ivy.settings" conf="compile"/>-->
+       <ivy:resolve log="${loglevel}" settingsRef="${ant.project.name}.ivy.settings" conf="compile"/>
      </target>
 
      <target name="ivy-compile" depends="ivy-resolve" description="Retrieve Ivy-managed artifacts for compile configuration">
@@ -1817,9 +1819,9 @@
      </target>
 
      <target name="jackson-pig-3039-test-download" description="To download jackson" unless="offline">
-        <!--<setproxy proxyhost="child-prc.intel.com" proxyport="913"/>
+        <setproxy proxyhost="child-prc.intel.com" proxyport="913"/>
         <get src="${jackson_core_repo_url}" dest="${jackson_core.jar}" usetimestamp="true"/>
-        <get src="${jackson_mapper_repo_url}" dest="${jackson_mapper.jar}" usetimestamp="true"/>-->
+        <get src="${jackson_mapper_repo_url}" dest="${jackson_mapper.jar}" usetimestamp="true"/>
      </target>
 
      <target name="jackson-pig-3039-test-clean" description="Clean the jackson jar files">
