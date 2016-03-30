@@ -108,7 +108,8 @@ public class SparkMiniCluster extends MiniGenericCluster {
                     }
                 }
             }
-
+            mapred_site.set("yarn.resourcemanager.address","88032");
+            mapred_site.set("yarn.resourcemanager.webapp.address","88088");
             mapred_site.writeXml(new FileOutputStream(MAPRED_CONF_FILE));
             yarn_site.writeXml(new FileOutputStream(YARN_CONF_FILE));
 
