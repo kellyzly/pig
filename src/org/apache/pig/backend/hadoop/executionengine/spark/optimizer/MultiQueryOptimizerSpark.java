@@ -94,15 +94,15 @@ public class MultiQueryOptimizerSpark extends SparkOpPlanVisitor {
                 for(PhysicalOperator root: rootCopys){
                     if (root instanceof POLoad) {
                         POLoad load = (POLoad) root;
-                            PhysicalPlan plClone = spliterPhysicalPlan.get(i);
-                            POStore store =  (POStore)plClone.getLeaves().get(0);
-                            if (load.getLFile().getFileName().equals(store.getSFile().getFileName())) {
-                                plClone.remove(store);
-                                PhysicalOperator succOfload =  singleSplitee.physicalPlan.getSuccessors(load).get(0);
-                                singleSplitee.physicalPlan.remove(load);
-                                mergePlanAWithPlanB(singleSplitee.physicalPlan, plClone, succOfload);
-                                i++;
-                            }
+                        PhysicalPlan plClone = spliterPhysicalPlan.get(i);
+                        POStore store =  (POStore)plClone.getLeaves().get(0);
+                        if (load.getLFile().getFileName().equals(store.getSFile().getFileName())) {
+                            plClone.remove(store);
+                            PhysicalOperator succOfload =  singleSplitee.physicalPlan.getSuccessors(load).get(0);
+                            singleSplitee.physicalPlan.remove(load);
+                            mergePlanAWithPlanB(singleSplitee.physicalPlan, plClone, succOfload);
+                            i++;
+                        }
                     }
                 }
 
@@ -174,14 +174,14 @@ public class MultiQueryOptimizerSpark extends SparkOpPlanVisitor {
     }
 
     private void removeSpliter(SparkOperPlan plan, SparkOperator spliter, SparkOperator splittee) throws PlanException {
-       if( plan.getPredecessors(spliter) != null){
-           List<SparkOperator> preds = new ArrayList(plan.getPredecessors(spliter));
-           plan.disconnect(spliter,splittee);
-           for(SparkOperator pred: preds){
-               plan.disconnect(pred, spliter);
-               plan.connect(pred, splittee);
-           }
-       }
+        if (plan.getPredecessors(spliter) != null) {
+            List<SparkOperator> preds = new ArrayList(plan.getPredecessors(spliter));
+            plan.disconnect(spliter, splittee);
+            for (SparkOperator pred : preds) {
+                plan.disconnect(pred, spliter);
+                plan.connect(pred, splittee);
+            }
+        }
         plan.remove(spliter);
     }
 
