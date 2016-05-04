@@ -100,7 +100,23 @@ public class IndexedKey implements Serializable, Comparable {
             } else if (key == null || that.key == null) {
                 return false;
             } else {
-                return key.equals(that.key);
+                if (useSecondaryKey) {
+                    try {
+                        Object firstKey = ((Tuple) key).get(0);
+                        Object firstKeyOfThat = ((Tuple) that.key).get(0);
+                        if (firstKey == null && firstKeyOfThat == null) {
+                            return true;
+                        } else if (firstKey == null || firstKeyOfThat == null) {
+                            return false;
+                        } else {
+                            return firstKey.equals(firstKeyOfThat);
+                        }
+                    } catch (ExecException e) {
+                        throw new RuntimeException("IndexedKey.equals# throw exception: ", e);
+                    }
+                } else {
+                    return key.equals(that.key);
+                }
             }
         } else {
             if (key == null || that.key == null) {
