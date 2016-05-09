@@ -23,6 +23,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 
 import scala.Product2;
 import scala.Tuple2;
@@ -123,7 +124,7 @@ public class JoinGroupSparkConverter implements RDDConverter<Tuple, Tuple, POJoi
             }
             int hashCode = 0;
             try {
-                hashCode = key.get(0).hashCode();
+                hashCode = Objects.hashCode(key.get(0));
             } catch (ExecException e) {
                 throw new RuntimeException("IndexedKeyPartitioner#getPartition: ", e);
             }
