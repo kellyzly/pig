@@ -24,6 +24,7 @@ import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -422,9 +423,20 @@ public class TestEvalPipeline {
         pigServer.registerQuery(query);
         Iterator<Tuple> iter = pigServer.openIterator("C");
         if(!iter.hasNext()) Assert.fail("No output found");
-        int numIdentity = 0;
+        List<Tuple> actualResList = new ArrayList<Tuple>();
         while(iter.hasNext()){
-            Tuple t = iter.next();
+            actualResList.add(iter.next());
+        }
+
+        if (Util.isSparkExecType(cluster.getExecType())) {
+            for (Tuple t : actualResList) {
+                Util.convertBagToSortedBag(t);
+            }
+            Collections.sort(actualResList);
+        }
+
+        int numIdentity = 0;
+        for (Tuple t : actualResList) {
             Assert.assertEquals((Integer)numIdentity, (Integer)t.get(0));
             Assert.assertEquals((Long)5L, (Long)t.get(2));
             Assert.assertEquals(LOOP_COUNT*2.0, (Double)t.get(3), 0.01);
@@ -467,9 +479,20 @@ public class TestEvalPipeline {
         pigServer.registerQuery(query);
         Iterator<Tuple> iter = pigServer.openIterator("C");
         if(!iter.hasNext()) Assert.fail("No output found");
-        int numIdentity = 0;
+        List<Tuple> actualResList = new ArrayList<Tuple>();
         while(iter.hasNext()){
-            Tuple t = iter.next();
+            actualResList.add(iter.next());
+        }
+
+        if (Util.isSparkExecType(cluster.getExecType())) {
+            for (Tuple t : actualResList) {
+                Util.convertBagToSortedBag(t);
+            }
+            Collections.sort(actualResList);
+        }
+
+        int numIdentity = 0;
+        for (Tuple t : actualResList) {
             Assert.assertEquals((Integer)numIdentity, (Integer)t.get(0));
             Assert.assertEquals((Long)5L, (Long)t.get(2));
             Assert.assertEquals(LOOP_COUNT*2.0, (Double)t.get(3), 0.01);
@@ -843,9 +866,20 @@ public class TestEvalPipeline {
         pigServer.registerQuery(query);
         Iterator<Tuple> iter = pigServer.openIterator("C");
         if(!iter.hasNext()) Assert.fail("No output found");
-        int numIdentity = 0;
+        List<Tuple> actualResList = new ArrayList<Tuple>();
         while(iter.hasNext()){
-            Tuple t = iter.next();
+            actualResList.add(iter.next());
+        }
+
+        if (Util.isSparkExecType(cluster.getExecType())) {
+            for (Tuple t : actualResList) {
+                Util.convertBagToSortedBag(t);
+            }
+            Collections.sort(actualResList);
+        }
+
+        int numIdentity = 0;
+        for (Tuple t : actualResList) {
             Assert.assertEquals((Integer)((numIdentity + 1) * 10), (Integer)t.get(0));
             Assert.assertEquals((Long)10L, (Long)t.get(1));
             Assert.assertEquals((Long)5L, (Long)t.get(2));
@@ -874,6 +908,10 @@ public class TestEvalPipeline {
         pigServer.registerQuery("A = LOAD '"
                 + Util.generateURI(tmpFile.toString(), pigContext) + "';");
         pigServer.registerQuery("B = distinct A;");
+        if (Util.isSparkExecType(cluster.getExecType())) {
+            pigServer.registerQuery("B = order B by *;");
+        }
+
         String query = "C = foreach B {"
         + "C1 = $1 - $0;"
         + "C2 = $1%2;"
@@ -884,7 +922,6 @@ public class TestEvalPipeline {
         pigServer.registerQuery(query);
         Iterator<Tuple> iter = pigServer.openIterator("C");
         if(!iter.hasNext()) Assert.fail("No output found");
-
         int numRows = 0;
         for(int i = 0; i < LOOP_COUNT; i++) {
             for(int j = 0; j < LOOP_COUNT; j+=2){
@@ -921,6 +958,10 @@ public class TestEvalPipeline {
         pigServer.registerQuery("A = LOAD '"
                 + Util.generateURI(tmpFile.toString(), pigContext) + "';");
         pigServer.registerQuery("B = distinct A;");
+        if (Util.isSparkExecType(cluster.getExecType())) {
+            pigServer.registerQuery("B = order B by *;");
+        }
+
         String query = "C = foreach B {"
         + "C1 = $0 + $1;"
         + "C2 = C1 + $0;"
@@ -930,7 +971,6 @@ public class TestEvalPipeline {
         pigServer.registerQuery(query);
         Iterator<Tuple> iter = pigServer.openIterator("C");
         if(!iter.hasNext()) Assert.fail("No output found");
-
         int numRows = 0;
         for(int i = 0; i < LOOP_COUNT; i++) {
             for(int j = 0; j < LOOP_COUNT; j+=2){

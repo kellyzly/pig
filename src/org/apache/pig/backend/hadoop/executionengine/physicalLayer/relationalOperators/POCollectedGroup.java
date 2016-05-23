@@ -257,13 +257,13 @@ public class POCollectedGroup extends PhysicalOperator {
             leafOps.add(leaf);
         }
    }
-    
+
     private void setIllustratorEquivalenceClasses(Tuple tin) {
         if (illustrator != null) {
           illustrator.getEquivalenceClasses().get(0).add(tin);
         }
     }
-    
+
     @Override
     public Tuple illustratorMarkup(Object in, Object out, int eqClassIndex) {
         return null;

@@ -163,6 +163,25 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
     }
 
     /**
+     * connect from and to and ignore some judgements: like ignoring judge whether from operator supports multiOutputs
+     * and whether to operator supports multiInputs
+     *
+     * @param from Operator data will flow from.
+     * @param to   Operator data will flow to.
+     * @throws PlanException if connect from or to which is not in the plan
+     */
+    public void forceConnect(E from, E to) throws PlanException {
+        markDirty();
+
+        // Check that both nodes are in the plan.
+        checkInPlan(from);
+        checkInPlan(to);
+        mFromEdges.put(from, to);
+        mToEdges.put(to, from);
+    }
+
+
+    /**
      * Create an edge between two nodes.  The direction of the edge implies data
      * flow.
      * @param from Operator data will flow from.
@@ -532,6 +551,24 @@ public abstract class OperatorPlan<E extends Operator> implements Iterable<E>, S
         add(leaf);
         for (E oper : ret) {
             connect(oper, leaf);
+        }
+    }
+
+    /**
+     * Adds the root operator to the plan and connects
+     * all existing roots the new root
+     *
+     * @param root
+     * @throws PlanException
+     */
+    public void addAsRoot(E root) throws PlanException {
+        List<E> oldRoots = new ArrayList<E>();
+        for (E operator : getRoots()) {
+            oldRoots.add(operator);
+        }
+        add(root);
+        for (E oper : oldRoots) {
+            connect(root, oper);
         }
     }
     
