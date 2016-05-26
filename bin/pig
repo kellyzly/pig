@@ -370,21 +370,29 @@ fi
 # for excluding spark-yarn is because spark-yarn is already being added
 # by the spark-yarn-client via jarOf(Client.Class)
 
-for f in $PIG_HOME/lib/spark/*.jar; do
-    if [[ $f == $PIG_HOME/lib/spark/spark-yarn* ]]; then
-        # Exclude spark-yarn.jar from shipped jars, but retain in classpath
+#for f in $PIG_HOME/lib/spark/*.jar; do
+#    if [[ $f == $PIG_HOME/lib/spark/spark-yarn* ]]; then
+#        # Exclude spark-yarn.jar from shipped jars, but retain in classpath
+#        SPARK_JARS=${SPARK_JARS}:$f;
+#    else
+#        SPARK_JARS=${SPARK_JARS}:$f;
+#        SPARK_YARN_DIST_FILES=${SPARK_YARN_DIST_FILES},file://$f;
+#        SPARK_DIST_CLASSPATH=${SPARK_DIST_CLASSPATH}:\${PWD}/`basename $f`
+#    fi
+#done
+
+#SPARK_JARS=${SPARK_JARS}:/home/zly/prj/oss/merge.pig/pig/lib/spark-assembly-1.6.0-hadoop2.6.0.jar
+#SPARK_YARN_DIST_FILES=${SPARK_YARN_DIST_FILES},file:///home/zly/prj/oss/merge.pig/pig/lib/spark-assembly-1.6.0-hadoop2.6.0.jar
+#SPARK_DIST_CLASSPATH=${SPARK_DIST_CLASSPATH}:/home/zly/prj/oss/merge.pig/pig/lib/spark-assembly-1.6.0-hadoop2.6.0.jar
+for f in $PIG_HOME/lib/*.jar; do
+    if [[ $f == $PIG_HOME/lib/spark-assembly* ]]; then
+        # Exclude spark-assembly.jar from shipped jars, but retain in classpath
         SPARK_JARS=${SPARK_JARS}:$f;
     else
-        SPARK_JARS=${SPARK_JARS}:$f;
-        SPARK_YARN_DIST_FILES=${SPARK_YARN_DIST_FILES},file://$f;
-        SPARK_DIST_CLASSPATH=${SPARK_DIST_CLASSPATH}:\${PWD}/`basename $f`
+    	SPARK_JARS=${SPARK_JARS}:$f;
+    	SPARK_YARN_DIST_FILES=${SPARK_YARN_DIST_FILES},file://$f;
+    	SPARK_DIST_CLASSPATH=${SPARK_DIST_CLASSPATH}:\${PWD}/`basename $f`
     fi
-done
-
-for f in $PIG_HOME/lib/*.jar; do
-    SPARK_JARS=${SPARK_JARS}:$f;
-    SPARK_YARN_DIST_FILES=${SPARK_YARN_DIST_FILES},file://$f;
-    SPARK_DIST_CLASSPATH=${SPARK_DIST_CLASSPATH}:\${PWD}/`basename $f`
 done
 CLASSPATH=${CLASSPATH}:${SPARK_JARS}
 
@@ -465,7 +473,7 @@ else
 
     ###### Set Spark related env #####
 
-    export SPARK_PIG_JAR=${PIG_JAR}
+    #export SPARK_PIG_JAR=${PIG_JAR}
 
     ###### Set Spark related env #####a
 

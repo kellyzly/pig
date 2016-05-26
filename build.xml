@@ -398,21 +398,6 @@
             <include name="snappy-java-${snappy.version}.jar" unless="isHadoop23"/>
             <include name="asm-${asm.version}.jar" unless="isHadoop23"/>
 
-            <include name="scala*.jar"/>
-            <include name="akka*.jar"/>
-            <include name="jcl-over-slf4j*.jar"/>
-            <include name="jul-to-slf4j*.jar"/>
-            <include name="slf4j*.jar"/>
-            <include name="commons*.jar"/>
-            <include name="config*.jar"/>
-            <include name="netty*.jar"/>
-            <include name="jetty*.jar"/>
-            <include name="metrics-core*.jar"/>
-            <include name="jackson*.jar"/>
-            <include name="metrics-json-*.jar"/>
-            <include name="json4s-*.jar"/>
-            <include name="javax.servlet-*.jar"/>
-            <include name="reflectasm*.jar"/>
         </patternset>
     </fileset>
 
