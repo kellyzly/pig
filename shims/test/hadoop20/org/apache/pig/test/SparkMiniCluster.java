@@ -24,7 +24,9 @@ import java.io.IOException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.pig.ExecType;
+import org.apache.pig.backend.hadoop.executionengine.Launcher;
 import org.apache.pig.backend.hadoop.executionengine.spark.SparkExecType;
+import org.apache.pig.backend.hadoop.executionengine.spark.SparkLauncher;
 
 public class SparkMiniCluster extends MiniGenericCluster {
     private static final File CONF_DIR = new File("build/classes");
@@ -67,4 +69,7 @@ public class SparkMiniCluster extends MiniGenericCluster {
         }
     }
 
+    static public Launcher getLauncher() {
+        return new SparkLauncher();
+    }
 }
