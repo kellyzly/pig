@@ -20,9 +20,11 @@ package org.apache.pig.backend.hadoop.executionengine.spark;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -112,6 +114,7 @@ import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.plan.OperatorKey;
 import org.apache.pig.impl.plan.PlanException;
 import org.apache.pig.impl.plan.VisitorException;
+import org.apache.pig.impl.util.JarManager;
 import org.apache.pig.impl.util.Utils;
 import org.apache.pig.tools.pigstats.OutputStats;
 import org.apache.pig.tools.pigstats.PigStats;
@@ -172,6 +175,7 @@ public class SparkLauncher extends Launcher {
                 .normalize().toString()
                 + "/";
         addFilesToSparkJob();
+        addExtraJarsToSparkJob();
         LinkedList<POStore> stores = PlanHelper.getPhysicalOperators(
                 physicalPlan, POStore.class);
         POStore firstStore = stores.getFirst();
@@ -226,7 +230,7 @@ public class SparkLauncher extends Launcher {
         Set<String> udfJars = udfJarsFinder.getUdfJars();
         for (String udfJar : udfJars) {
             File jarFile = new File(udfJar);
-            addJarToSparkJobWorkingDirectory(jarFile, jarFile.getName());
+            addResourceToSparkJobWorkingDirectory(jarFile, jarFile.getName(),ResourceType.JAR);
         }
     }
 
@@ -339,7 +343,7 @@ public class SparkLauncher extends Launcher {
     }
 
     private void addFilesToSparkJob() throws IOException {
-        LOG.info("add Files Spark Job");
+        LOG.info("add files to Spark Job");
         String shipFiles = pigContext.getProperties().getProperty(
                 "pig.streaming.ship.files");
         shipFiles(shipFiles);
@@ -347,7 +351,19 @@ public class SparkLauncher extends Launcher {
                 "pig.streaming.cache.files");
         cacheFiles(cacheFiles);
     }
-
+ 
+    private void addExtraJarsToSparkJob() throws IOException {
+        LOG.info("add extra jars to Spark Job");
+        List<String> scriptJars = new ArrayList<String>();
+        for (String scriptJar : pigContext.scriptJars) {
+            if (!scriptJars.contains(scriptJar)) {
+                scriptJars.add(scriptJar);
+                File scriptJarFile = new File(scriptJar);
+                addResourceToSparkJobWorkingDirectory(scriptJarFile,
+                        scriptJarFile.getName(), ResourceType.JAR);
+            }
+        }
+    }
 
     private void shipFiles(String shipFiles)
             throws IOException {
@@ -356,7 +372,8 @@ public class SparkLauncher extends Launcher {
                 File shipFile = new File(file.trim());
                 if (shipFile.exists()) {
                     LOG.info(String.format("shipFile:%s", shipFile));
-                    addJarToSparkJobWorkingDirectory(shipFile, shipFile.getName());
+                    addResourceToSparkJobWorkingDirectory(shipFile,
+                            shipFile.getName(), ResourceType.FILE);
                 }
             }
         }
@@ -374,20 +391,27 @@ public class SparkLauncher extends Launcher {
                 fs.copyToLocalFile(src, tmpFilePath);
                 tmpFile.deleteOnExit();
                 LOG.info(String.format("cacheFile:%s", fileName));
-                addJarToSparkJobWorkingDirectory(tmpFile, fileName);
+                addResourceToSparkJobWorkingDirectory(tmpFile, fileName,
+                        ResourceType.FILE);
             }
         }
     }
-
-    private void addJarToSparkJobWorkingDirectory(File jarFile, String jarName) throws IOException {
-        LOG.info("Added jar " + jarName);
+    
+    public static enum ResourceType{
+        JAR,
+        FILE
+    }
+    
+    private void addResourceToSparkJobWorkingDirectory(File resourcePath,
+            String resourceName, ResourceType resourceType) throws IOException {
+     LOG.info("Added resource " + resourceName);
         boolean isLocal = System.getenv("SPARK_MASTER") != null ? System
                 .getenv("SPARK_MASTER").equalsIgnoreCase("LOCAL") : true;
         if (isLocal) {
             File localFile = new File(currentDirectoryPath + "/"
-                    + jarName);
-            if (jarFile.getAbsolutePath().equals(localFile.getAbsolutePath())
-                    && jarFile.exists()) {
+                    + resourceName);
+            if (resourcePath.getAbsolutePath().equals(localFile.getAbsolutePath())
+                    && resourcePath.exists()) {
                 return;
             }
             // When multiple threads start SparkLauncher, delete/copy actions should be in a critical section
@@ -401,12 +425,17 @@ public class SparkLauncher extends Launcher {
                     LOG.info(String.format("jar file %s not exists,",
                             localFile.getAbsolutePath()));
                 }
-                Files.copy(Paths.get(new Path(jarFile.getAbsolutePath()).toString()),
+                Files.copy(Paths.get(new Path(resourcePath.getAbsolutePath()).toString()),
                         Paths.get(localFile.getAbsolutePath()));
             }
         } else {
-            sparkContext.addFile(jarFile.toURI().toURL()
+            if(resourceType == ResourceType.JAR){
+            sparkContext.addJar(resourcePath.toURI().toURL()
                 .toExternalForm());
+            }else if( resourceType == ResourceType.FILE){
+                sparkContext.addFile(resourcePath.toURI().toURL()
+                        .toExternalForm());
+            }
         }
     }
 
@@ -472,11 +501,8 @@ public class SparkLauncher extends Launcher {
             }
 
             String sparkHome = System.getenv("SPARK_HOME");
-            String sparkJarsSetting = System.getenv("SPARK_JARS");
-            String pigJar = System.getenv("SPARK_PIG_JAR");
-            String[] sparkJars = sparkJarsSetting == null ? new String[]{}
-                    : sparkJarsSetting.split(",");
-            List<String> jars = Lists.asList(pigJar, sparkJars);
+              
+            List<String> jars = JarManager.getDefaultJars();
 
             if (!master.startsWith("local") && !master.equals("yarn-client")) {
                 // Check that we have the Mesos native library and Spark home
