@@ -52,6 +52,7 @@ import org.apache.pig.test.TestMapSideCogroup.DummyCollectableLoader;
 import org.apache.pig.test.TestMapSideCogroup.DummyIndexableLoader;
 import org.junit.After;
 import org.junit.AfterClass;
+import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -98,6 +99,7 @@ public class TestMergeJoinOuter {
     
     @Test
     public void testCompilation(){
+        Assume.assumeTrue("Skip this test for Spark until PIG-4810 is resolved!",!Util.isSparkExecType(cluster.getExecType()));
         try{
             String query = "A = LOAD 'data1' using "+ DummyCollectableLoader.class.getName() +"() as (id, name, grade);" + 
             "B = LOAD 'data2' using "+ DummyIndexableLoader.class.getName() +"() as (id, name, grade);" +
@@ -144,6 +146,7 @@ public class TestMergeJoinOuter {
 
     @Test
     public void testFailure() throws Exception{
+        Assume.assumeTrue("Skip this test for Spark until PIG-4810 is resolved!",!Util.isSparkExecType(cluster.getExecType()));
         String query = "A = LOAD 'data1' using "+ DummyCollectableLoader.class.getName() +"() as (id, name, grade);" +
         "E = group A by id;" +
         "B = LOAD 'data2' using "+ DummyIndexableLoader.class.getName() +"() as (id, name, grade);" +
@@ -168,11 +171,7 @@ public class TestMergeJoinOuter {
     
     @Test
     public void testLeftOuter() throws IOException {
-
-        // TODO: Enable this test when Spark engine implements Merge Join algorithm.
-        if (Util.isSparkExecType(cluster.getExecType()))
-            return;
-
+        Assume.assumeTrue("Skip this test for Spark until PIG-4810 is resolved!",!Util.isSparkExecType(cluster.getExecType()));
         pigServer.registerQuery("A = LOAD '"+INPUT_FILE1+"' using "+ DummyCollectableLoader.class.getName() +"() as (c1:chararray, c2:chararray);");
         pigServer.registerQuery("B = LOAD '"+INPUT_FILE2+"' using "+ DummyIndexableLoader.class.getName() +"() as (c1:chararray, c2:chararray);");
 
@@ -201,11 +200,7 @@ public class TestMergeJoinOuter {
     
     @Test
     public void testRightOuter() throws IOException{
-
-        // TODO: Enable this test when Spark engine implements Merge Join algorithm.
-        if (Util.isSparkExecType(cluster.getExecType()))
-            return;
-
+        Assume.assumeTrue("Skip this test for Spark until PIG-4810 is resolved!",!Util.isSparkExecType(cluster.getExecType()));
         pigServer.registerQuery("A = LOAD '"+INPUT_FILE1+"' using "+ DummyCollectableLoader.class.getName() +"() as (c1:chararray, c2:chararray);");
         pigServer.registerQuery("B = LOAD '"+INPUT_FILE2+"' using "+ DummyIndexableLoader.class.getName() +"() as (c1:chararray, c2:chararray);");
         pigServer.registerQuery("C = join A by c1 right, B by c1 using 'merge';");
@@ -232,11 +227,7 @@ public class TestMergeJoinOuter {
     
     @Test
     public void testFullOuter() throws IOException{
-
-        // TODO: Enable this test when Spark engine implements Merge Join algorithm.
-        if (Util.isSparkExecType(cluster.getExecType()))
-            return;
-
+        Assume.assumeTrue("Skip this test for Spark until PIG-4810 is resolved!",!Util.isSparkExecType(cluster.getExecType()));
         pigServer.registerQuery("A = LOAD '"+INPUT_FILE1+"' using "+ DummyCollectableLoader.class.getName() +"() as (c1:chararray, c2:chararray);");
         pigServer.registerQuery("B = LOAD '"+INPUT_FILE2+"' using "+ DummyIndexableLoader.class.getName() +"() as (c1:chararray, c2:chararray);");
         pigServer.registerQuery("C = join A by c1 full, B by c1 using 'merge';");
