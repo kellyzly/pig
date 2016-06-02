@@ -383,14 +383,9 @@ fi
 
 for f in $PIG_HOME/lib/*.jar; do
 	SPARK_JARS=${SPARK_JARS}:$f;
-    	#SPARK_YARN_DIST_FILES=${SPARK_YARN_DIST_FILES},file://$f;
-    	#SPARK_DIST_CLASSPATH=${SPARK_DIST_CLASSPATH}:\${PWD}/`basename $f`
 done
 CLASSPATH=${CLASSPATH}:${SPARK_JARS}
 
-#export SPARK_YARN_DIST_FILES=`echo ${SPARK_YARN_DIST_FILES} | sed 's/^,//g'`
-#export SPARK_JARS=${SPARK_YARN_DIST_FILES}
-#export SPARK_DIST_CLASSPATH
 ################# ADDING SPARK DEPENDENCIES ##################
 
 # run it

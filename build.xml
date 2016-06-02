@@ -39,7 +39,7 @@
 
     <!-- source properties -->
     <property name="lib.dir" value="${basedir}/lib" />
-    <property name="spark.lib.dir" value="${basedir}/lib/spark" />
+    <!--<property name="spark.lib.dir" value="${basedir}/lib/spark" />-->
     <property name="src.dir" value="${basedir}/src" />
     <property name="python.src.dir" value="${src.dir}/python" />
     <property name="src.lib.dir" value="${basedir}/lib-src" />
@@ -763,10 +763,10 @@
     </target>
 
     <target name="copySparkDependencies">
-        <mkdir dir="${spark.lib.dir}" />
+       <!-- <mkdir dir="${spark.lib.dir}" />
         <copy todir="${spark.lib.dir}">
         <fileset dir="${build.ivy.spark.lib.dir}" includes="*.jar"/>
-        </copy>
+        </copy>-->
     </target>
 
     <target name="copyh1Dependencies" unless="isHadoop23">
