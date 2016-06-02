@@ -43,6 +43,7 @@ import org.apache.pig.test.utils.TestHelper;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Assert;
+import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -294,7 +295,7 @@ public class TestCollectedGroup {
 
     @Test
     public void testMapsideGroupWithMergeJoin() throws IOException{
-        if( !Util.isSparkExecType(cluster.getExecType())) {
+            Assume.assumeTrue("Skip this test for Spark until PIG-4810 is resolved!",!Util.isSparkExecType(cluster.getExecType()));
             pigServer = new PigServer(cluster.getExecType(), cluster.getProperties());
             pigServer.registerQuery("A = LOAD '" + INPUT_FILE + "' using " + DummyCollectableLoader.class.getName() + "() as (id, name, grade);");
             pigServer.registerQuery("B = LOAD '" + INPUT_FILE + "' using " + DummyCollectableLoader.class.getName() + "() as (id, name, grade);");
@@ -328,7 +329,6 @@ public class TestCollectedGroup {
                 e.printStackTrace();
                 Assert.fail(e.getMessage());
             }
-        }
     }
 
     public static class DummyCollectableLoader extends PigStorage implements CollectableLoadFunc{
