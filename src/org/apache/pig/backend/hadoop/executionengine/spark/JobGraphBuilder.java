@@ -69,8 +69,11 @@ public class JobGraphBuilder extends SparkOpPlanVisitor {
     private Map<OperatorKey, RDD<Tuple>> sparkOpRdds = new HashMap<OperatorKey, RDD<Tuple>>();
     private Map<OperatorKey, RDD<Tuple>> physicalOpRdds = new HashMap<OperatorKey, RDD<Tuple>>();
 
-    public JobGraphBuilder(SparkOperPlan plan, Map<Class<? extends PhysicalOperator>, RDDConverter> convertMap, SparkPigStats sparkStats, JavaSparkContext sparkContext, JobMetricsListener jobMetricsListener, String jobGroupID) {
-        super(plan, new DependencyOrderWalker<SparkOperator, SparkOperPlan>(plan, true));
+    public JobGraphBuilder(SparkOperPlan plan,
+            Map<Class<? extends PhysicalOperator>, RDDConverter> convertMap,
+            SparkPigStats sparkStats, JavaSparkContext sparkContext,
+            JobMetricsListener jobMetricsListener, String jobGroupID) {
+    super(plan, new DependencyOrderWalker<SparkOperator, SparkOperPlan>(plan, true));
         this.sparkPlan = plan;
         this.convertMap = convertMap;
         this.sparkStats = sparkStats;
