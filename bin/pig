@@ -362,37 +362,29 @@ if [ "$includeHCatalog" == "true" ]; then
 fi
 
 ################# ADDING SPARK DEPENDENCIES ##################
-# Spark typically works with a single assembly file. However this
-# assembly isn't available as a artifact to pull in via ivy.
-# To work around this short coming, we add all the jars barring
-# spark-yarn to DIST through dist-files and then add them to classpath
-# of the executors through an independent env variable. The reason
-# for excluding spark-yarn is because spark-yarn is already being added
-# by the spark-yarn-client via jarOf(Client.Class)
+# Please specify SPARK_HOME first so that we can locate $SPARK_HOME/lib/spark-assembly*.jar,
+# we will add spark-assembly*.jar to the classpath.
+if [ -z "$SPARK_HOME" ]; then
+   echo "Error: SPARK_HOME is not set!"  
+   exit 1
+fi
 
-#for f in $PIG_HOME/lib/spark/*.jar; do
-#    if [[ $f == $PIG_HOME/lib/spark/spark-yarn* ]]; then
-#        # Exclude spark-yarn.jar from shipped jars, but retain in classpath
-#        SPARK_JARS=${SPARK_JARS}:$f;
-#    else
-#        SPARK_JARS=${SPARK_JARS}:$f;
-#        SPARK_YARN_DIST_FILES=${SPARK_YARN_DIST_FILES},file://$f;
-#        SPARK_DIST_CLASSPATH=${SPARK_DIST_CLASSPATH}:\${PWD}/`basename $f`
-#    fi
-#done
+# Please specify SPARK_JAR which is the hdfs path of spark-assembly*.jar to allow YARN to cache spark-assembly*.jar on nodes so that it doesn't need to be distributed each time an application runs.
+if [ -z "$SPARK_JAR" ]; then
+   echo "Error: SPARK_JAR is not set, SPARK_JAR stands for the hdfs location of spark-assembly*.jar. This allows YARN to cache spark-assembly*.jar on nodes so that it doesn't need to be distributed each time an application runs."  
+   exit 1
+fi
 
-#SPARK_JARS=${SPARK_JARS}:/home/zly/prj/oss/merge.pig/pig/lib/spark-assembly-1.6.0-hadoop2.6.0.jar
-#SPARK_YARN_DIST_FILES=${SPARK_YARN_DIST_FILES},file:///home/zly/prj/oss/merge.pig/pig/lib/spark-assembly-1.6.0-hadoop2.6.0.jar
-#SPARK_DIST_CLASSPATH=${SPARK_DIST_CLASSPATH}:/home/zly/prj/oss/merge.pig/pig/lib/spark-assembly-1.6.0-hadoop2.6.0.jar
+if [ -n "$SPARK_HOME" ]; then
+    echo "Using Spark Home: " ${SPARK_HOME}
+    SPARK_ASSEMBLY_JAR=`ls ${SPARK_HOME}/lib/spark-assembly*`
+    CLASSPATH=${CLASSPATH}:$SPARK_ASSEMBLY_JAR
+fi
+
 for f in $PIG_HOME/lib/*.jar; do
-    if [[ $f == $PIG_HOME/lib/spark-assembly* ]]; then
-        # Exclude spark-assembly.jar from shipped jars, but retain in classpath
-        SPARK_JARS=${SPARK_JARS}:$f;
-    else
-    	SPARK_JARS=${SPARK_JARS}:$f;
+	SPARK_JARS=${SPARK_JARS}:$f;
     	SPARK_YARN_DIST_FILES=${SPARK_YARN_DIST_FILES},file://$f;
     	SPARK_DIST_CLASSPATH=${SPARK_DIST_CLASSPATH}:\${PWD}/`basename $f`
-    fi
 done
 CLASSPATH=${CLASSPATH}:${SPARK_JARS}
 
