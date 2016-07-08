@@ -100,25 +100,32 @@ public class IndexedKey implements Serializable, Comparable {
             } else if (key == null || that.key == null) {
                 return false;
             } else {
-                //in secondaryKey sort case, if two tuples with same index and first key, they are considered as same.
-                if (useSecondaryKey) {
-                    try {
-                        Object firstKey = ((Tuple) key).get(0);
-                        Object firstKeyOfThat = ((Tuple) that.key).get(0);
-                        if (firstKey == null && firstKeyOfThat == null) {
-                            return true;
-                        } else if (firstKey == null || firstKeyOfThat == null) {
-                            return false;
-                        } else {
-                            boolean ret =  firstKey.equals(firstKeyOfThat);
-                            return ret;
-                        }
-                    } catch (ExecException e) {
-                        throw new RuntimeException("IndexedKey.equals# throw exception: ", e);
-                    }
-                } else {
-                    return key.equals(that.key);
-                }
+//                //in secondaryKey sort case, if two tuples with same index and first key, they are considered as same.
+//                if (useSecondaryKey) {
+//                    LOG.info("IndexedKey#equals when useSecondarykey");
+//                    for (StackTraceElement ste : Thread.currentThread().getStackTrace()) {
+//                        LOG.info(ste);
+//                    }
+//
+//                    try {
+//                        Object firstKey = ((Tuple) key).get(0);
+//                        Object firstKeyOfThat = ((Tuple) that.key).get(0);
+//                        if (firstKey == null && firstKeyOfThat == null) {
+//                            return true;
+//                        } else if (firstKey == null || firstKeyOfThat == null) {
+//                            return false;
+//                        } else {
+//                            boolean ret =  firstKey.equals(firstKeyOfThat);
+//                            return ret;
+//                        }
+//                    } catch (ExecException e) {
+//                        throw new RuntimeException("IndexedKey.equals# throw exception: ", e);
+//                    }
+//                } else {
+//                    return key.equals(that.key);
+//                }
+
+                return key.equals(that.key);
             }
         } else {
             if (key == null || that.key == null) {
