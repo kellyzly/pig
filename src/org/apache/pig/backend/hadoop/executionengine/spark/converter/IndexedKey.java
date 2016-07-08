@@ -100,7 +100,25 @@ public class IndexedKey implements Serializable, Comparable {
             } else if (key == null || that.key == null) {
                 return false;
             } else {
-                return key.equals(that.key);
+                //in secondaryKey sort case, if two tuples with same index and first key, they are considered as same.
+                if (useSecondaryKey) {
+                    try {
+                        Object firstKey = ((Tuple) key).get(0);
+                        Object firstKeyOfThat = ((Tuple) that.key).get(0);
+                        if (firstKey == null && firstKeyOfThat == null) {
+                            return true;
+                        } else if (firstKey == null || firstKeyOfThat == null) {
+                            return false;
+                        } else {
+                            boolean ret =  firstKey.equals(firstKeyOfThat);
+                            return ret;
+                        }
+                    } catch (ExecException e) {
+                        throw new RuntimeException("IndexedKey.equals# throw exception: ", e);
+                    }
+                } else {
+                    return key.equals(that.key);
+                }
             }
         } else {
             if (key == null || that.key == null) {
@@ -148,7 +166,7 @@ public class IndexedKey implements Serializable, Comparable {
     }
 
     //firstly compare the index
-    //secondly compare the key
+    //secondly compare the key (both first and secondary key)
     @Override
     public int compareTo(Object o) {
         IndexedKey that = (IndexedKey) o;
@@ -160,15 +178,9 @@ public class IndexedKey implements Serializable, Comparable {
         } else {
             if (useSecondaryKey) {
                 Tuple thisCompoundKey = (Tuple) key;
-                Tuple thatCompoundKey = (Tuple) that.getKey();
-                try {
-                    Object thisSecondary = thisCompoundKey.get(1);
-                    Object thatSecondaryKey = thatCompoundKey.get(1);
-                    return PigSecondaryKeyComparatorSpark.compareSecondaryKeys(thisSecondary, thatSecondaryKey, secondarySortOrder);
-
-                } catch (ExecException e) {
-                    throw new RuntimeException("IndexedKey#compareTo throws exception ", e);
-                }
+                Tuple thatCompoundKey = (Tuple)that.getKey();
+                return PigSecondaryKeyComparatorSpark.compareKeys(thisCompoundKey, thatCompoundKey,
+                        secondarySortOrder);
             } else {
                 return DataType.compare(key, that.getKey());
             }
