@@ -29,6 +29,7 @@ import java.util.Set;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.pig.PigConfiguration;
+import org.apache.pig.StoreFunc;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.expressionOperators.POUserFunc;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhysicalPlan;
@@ -108,6 +109,12 @@ public class UnionOptimizer extends TezOpPlanVisitor {
         if((tezOp.isLimit() || tezOp.isLimitAfterSort()) && tezOp.getRequestedParallelism() == 1) {
             return false;
         }
+
+        // If user has specified a PARALLEL clause with the union operator
+        // turn off union optimization
+        if (tezOp.getRequestedParallelism() != -1) {
+            return false;
+        }
         // Two vertices separately ranking with 1 to n and writing to output directly
         // will make each rank repeate twice which is wrong. Rank always needs to be
         // done from single vertex to have the counting correct.
@@ -120,10 +127,25 @@ public class UnionOptimizer extends TezOpPlanVisitor {
     public static boolean isOptimizableStoreFunc(TezOperator tezOp,
             List<String> supportedStoreFuncs, List<String> unsupportedStoreFuncs)
             throws VisitorException {
-        if (supportedStoreFuncs != null || unsupportedStoreFuncs != null) {
-            List<POStoreTez> stores = PlanHelper.getPhysicalOperators(tezOp.plan, POStoreTez.class);
-            for (POStoreTez store : stores) {
-                String name = store.getStoreFunc().getClass().getName();
+        List<POStoreTez> stores = PlanHelper.getPhysicalOperators(tezOp.plan, POStoreTez.class);
+
+        for (POStoreTez store : stores) {
+            String name = store.getStoreFunc().getClass().getName();
+            if (store.getStoreFunc() instanceof StoreFunc) {
+                StoreFunc func = (StoreFunc) store.getStoreFunc();
+                if (func.supportsParallelWriteToStoreLocation() != null) {
+                    if (func.supportsParallelWriteToStoreLocation()) {
+                        continue;
+                    } else {
+                        LOG.warn(name + " does not support union optimization."
+                                + " Disabling it. There will be some performance degradation.");
+                        return false;
+                    }
+                }
+            }
+            // If StoreFunc does not explicitly state support, then check supported and
+            // unsupported config settings.
+            if (supportedStoreFuncs != null || unsupportedStoreFuncs != null) {
                 if (unsupportedStoreFuncs != null
                         && unsupportedStoreFuncs.contains(name)) {
                     return false;

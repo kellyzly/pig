@@ -19,10 +19,110 @@
 Pig Change Log
 
 Trunk (unreleased changes)
+ 
+INCOMPATIBLE CHANGES
+ 
+IMPROVEMENTS
+
+PIG-4931: Document IN operator (dbist13 vi daijy)
+
+PIG-4852: Add accumulator implementation for MaxTupleBy1stField (szita via daijy)
+
+PIG-4925: Support for passing the bloom filter to the Bloom UDF (rohini)
+
+PIG-4911: Provide option to disable DAG recovery (rohini)
+
+PIG-4906: Add Bigdecimal functions in Over function (cgalan via daijy)
+
+PIG-2768: Fix org.apache.hadoop.conf.Configuration deprecation warnings for Hadoop 23 (rohini)
+ 
+OPTIMIZATIONS
+ 
+BUG FIXES
+
+PIG-4933: TestDataBagAccess.testBagConstantFlatten1/TestLogicalPlanBuilder.testQuery90 broken after PIG-2315 (knoguchi)
+
+PIG-4965: Refactor test/perf/pigmix/bin/runpigmix.pl to delete the output of single test case
+  if we enable cleanup_after_test (kellyzly via daijy)
+
+PIG-4966: Fix Pig compatibility with Hive 2.1.0 (zyork via daijy)
+
+PIG-4935: TEZ_USE_CLUSTER_HADOOP_LIBS is always set to true (rohini)
+
+PIG-4961: CROSS followed by LIMIT inside nested foreach drop data from result (rohini)
+
+PIG-4960: Split followed by order by/skewed join is skewed in Tez (rohini)
+
+PIG-4957: See "Received kill signal" message for a normal run after PIG-4921 (rohini)
+
+PIG-4953: Predicate push-down will not run filters for single unary expressions (rdblue via daijy)
+
+PIG-4940: Predicate push-down filtering unary expressions can be pushed (rdblue via daijy)
+
+PIG-4938: [PiggyBank] XPath returns empty values when using aggregation method (nkollar via daijy)
+
+PIG-4896: Param substitution ignored when redefined (knoguchi)
+
+PIG-2315: Make as clause work in generate (daijy via knoguchi)
+
+PIG-4921: Kill running jobs on InterruptedException (rohini)
+
+PIG-4916: Pig on Tez fail to remove temporary HDFS files in some cases (daijy)
+
+Release 0.16.1 - Unreleased
 
 INCOMPATIBLE CHANGES
 
 IMPROVEMENTS
+
+PIG-4945: Update document for conflicting macro params (knoguchi via daijy)
+
+OPTIMIZATIONS
+
+BUG FIXES
+
+PIG-4947: LOAD with HBaseStorage using a mix of pure wildcards and prefixed wildcards results
+  in empty maps for the pure wildcarded column families (daijy)
+
+PIG-4948: Pig on Tez AM use too much memory on a small cluster (daijy)
+
+PIG-4949: Fix registering jar in S3 which was broken by PIG-4417 in Pig 0.16 (yangyishan0901m via daijy)
+
+PIG-4950: Fix minor issues with running scripts in non-local FileSystems (petersla via daijy)
+
+Release 0.16.0
+
+INCOMPATIBLE CHANGES
+
+IMPROVEMENTS
+
+PIG-4719: Documentation for PIG-4704: Customizable Error Handling for Storers in Pig (daijy)
+
+PIG-4714: Improve logging across multiple components with callerId (daijy)
+
+PIG-4885: Turn off union optimizer if there is PARALLEL clause in union in Tez (rohini)
+
+PIG-4894: Add API for StoreFunc to specify if they are write safe from two different vertices (rohini)
+
+PIG-4884: Tez needs to use DistinctCombiner.Combine (rohini)
+
+PIG-4874: Remove schema tuple reference overhead for replicate join hashmap (rohini)
+
+PIG-4879: Pull latest version of joda-time (rohini)
+
+PIG-4526: Make setting up the build environment easier (nielsbasjes via rohini)
+
+PIG-4641: Print the instance of Object without using toString() (sandyridgeracer via rohini)
+
+PIG-4455: Should use DependencyOrderWalker instead of DepthFirstWalker in MRPrinter (zjffdu via rohini)
+
+PIG-4866: Do not serialize PigContext in configuration to the backend (rohini)
+
+PIG-4547: Update Jython version to 2.7.0 (erwaman via daijy)
+
+PIG-4862: POProject slow by creating StackTrace repeatedly (knoguchi)
+
+PIG-4853: Fetch inputs before starting outputs (rohini)
 
 PIG-4847: POPartialAgg processing and spill improvements (rohini)
 
@@ -104,6 +204,62 @@ PIG-4638: Allow TOMAP to accept dynamically sized input (nielsbasjes via daijy)
 PIG-4639: Add better parser for Apache HTTPD access log (nielsbasjes via daijy)
 
 BUG FIXES
+
+PIG-4821: Pig chararray field with special UTF-8 chars as part of tuple join key produces wrong results in Tez (rohini)
+
+PIG-4734: TOMAP schema inferring breaks some scripts in type checking for bincond (daijy)
+
+PIG-4786: CROSS will not work correctly with Grace Parallelism (daijy)
+
+PIG-3227: SearchEngineExtractor does not work for bing (dannyant via daijy)
+
+PIG-4902: Fix UT failures on 0.16 branch: TestTezGraceParallelism, TestPigScriptParser (daijy)
+
+PIG-4909: PigStorage incompatible with commons-cli-1.3 (knoguchi)
+
+PIG-4908: JythonFunction refers to Oozie launcher script absolute path (rohini)
+
+PIG-4905: Input of empty dir does not produce empty output file in Tez (rohini)
+
+PIG-4576: Nightly test HCat_DDL_2 fails with TDE ON (nmaheshwari via daijy)
+
+PIG-4873: InputSplit.getLocations return null and result a NPE in Pig (daijy)
+
+PIG-4895: User UDFs relying on mapreduce.job.maps broken in Tez (rohini)
+
+PIG-4883: MapKeyType of splitter was set wrongly in specific multiquery case (kellyzly via rohini)
+
+PIG-4887: Parameter substitution skipped with glob on register (knoguchi)
+
+PIG-4889: Replacing backslash fails as lexical error (knoguchi)
+
+PIG-4880: Overlapping of parameter substitution names inside&outside a macro fails with NPE (knoguchi)
+
+PIG-4881: TestBuiltin.testUniqueID failing on hadoop-1.x (knoguchi)
+
+PIG-4888: Line number off when reporting syntax error inside a macro (knoguchi)
+
+PIG-3772: Syntax error when casting an inner schema of a bag and line break involved (ssvinarchukhorton via knoguchi)
+
+PIG-4892: removing /tmp/output before UT (daijy)
+
+PIG-4882: Remove hardcoded groovy.grape.report.downloads=true from DownloadResolver (erwaman via daijy)
+
+PIG-4581: thread safe issue in NodeIdGenerator (rcatherinot via rohini)
+
+PIG-4878: Fix issues from PIG-4847 (rohini)
+
+PIG-4877: LogFormat parser fails test (nielsbasjes via daijy)
+
+PIG-4860: Loading data using OrcStorage() accepts only default FileSystem path (beriaanirudh via rohini)
+
+PIG-4868: Low values for bytes.per.reducer configured by user not honored in Tez for inputs (rohini)
+
+PIG-4869: Removing unwanted configuration in Tez broke ConfiguredFailoverProxyProvider (rohini)
+
+PIG-4867: -stop_on_failure does not work with Tez (rohini)
+
+PIG-4844: Tez AM runs out of memory when vertex has high number of outputs (rohini)
 
 PIG-4851: Null not padded when input has less fields than declared schema for some loader (rohini)
 

@@ -18,6 +18,7 @@
 
 package org.apache.pig;
 
+
 /**
  * Container for static configuration strings, defaults, etc. This is intended just for keys that can
  * be set by users, not for keys that are generally used within pig.
@@ -62,9 +63,15 @@ public class PigConfiguration {
     public static final String PIG_TEZ_OPT_UNION = "pig.tez.opt.union";
     /**
      * These keys are used to enable or disable tez union optimization for
-     * specific StoreFuncs so that optimization is only applied to StoreFuncs
-     * that do not hard part file names and honor mapreduce.output.basename and
-     * is turned of for those that do not. Refer PIG-4649
+     * specific StoreFuncs. Optimization should be turned off for those
+     * StoreFuncs that hard code part file names and do not prefix file names
+     * with mapreduce.output.basename configuration.
+     *
+     * If the StoreFuncs implement
+     * {@link StoreFunc#supportsParallelWriteToStoreLocation()} and return true
+     * or false then that is is used to turn on or off union optimization
+     * respectively. These settings can be used for StoreFuncs that have not
+     * implemented the API yet.
      */
     public static final String PIG_TEZ_OPT_UNION_SUPPORTED_STOREFUNCS = "pig.tez.opt.union.supported.storefuncs";
     public static final String PIG_TEZ_OPT_UNION_UNSUPPORTED_STOREFUNCS = "pig.tez.opt.union.unsupported.storefuncs";
@@ -151,6 +158,12 @@ public class PigConfiguration {
      * This key is used to configure grace parallelism in tez. Default is true.
      */
     public static final String PIG_TEZ_GRACE_PARALLELISM = "pig.tez.grace.parallelism";
+    /**
+     * This key is used to turn off dag recovery if there is auto parallelism.
+     * Default is false. Useful when running with Tez versions before Tez 0.8
+     * which have issues with auto parallelism during DAG recovery.
+     */
+    public static final String PIG_TEZ_AUTO_PARALLELISM_DISABLE_DAG_RECOVERY = "pig.tez.auto.parallelism.disable.dag.recovery";
 
     /**
      * This key is used to configure compression for the pig input splits which
@@ -324,17 +337,17 @@ public class PigConfiguration {
     /**
      * Boolean value used to enable or disable error handling for storers
      */
-    public static final String PIG_ALLOW_STORE_ERRORS = "pig.allow.store.errors";
+    public static final String PIG_ERROR_HANDLING_ENABLED = "pig.error-handling.enabled";
 
     /**
      * Controls the minimum number of errors
      */
-    public static final String PIG_ERRORS_MIN_RECORDS = "pig.errors.min.records";
+    public static final String PIG_ERROR_HANDLING_MIN_ERROR_RECORDS = "pig.error-handling.min.error.records";
 
     /**
      * Set the threshold for percentage of errors
      */
-    public static final String PIG_ERROR_THRESHOLD_PERCENT = "pig.error.threshold.percent";
+    public static final String PIG_ERROR_HANDLING_THRESHOLD_PERCENT = "pig.error-handling.error.threshold";
 
     /**
      * Comma-delimited entries of commands/operators that must be disallowed.
@@ -410,6 +423,21 @@ public class PigConfiguration {
      * Default is 350MB
      */
     public static final String PIG_SPILL_UNUSED_MEMORY_THRESHOLD_SIZE = "pig.spill.unused.memory.threshold.size";
+
+    /**
+     * Log tracing id that can be used by upstream clients for tracking respective logs
+     */
+    public static final String CALLER_ID = "pig.log.trace.id";
+
+    /**
+     * Enable ATS for Pig
+     */
+    public static final String ENABLE_ATS = "pig.ats.enabled";
+
+    /**
+     * Enable ATS for Pig
+     */
+    public static final String PIG_TEZ_CONFIGURE_AM_MEMORY = "pig.tez.configure.am.memory";
 
     // Deprecated settings of Pig 0.13
 

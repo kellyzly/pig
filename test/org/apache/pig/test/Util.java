@@ -75,7 +75,7 @@ import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MRConfigurat
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MapReduceLauncher;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.plans.MROperPlan;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhysicalPlan;
-import org.apache.pig.backend.hadoop.executionengine.tez.TezResourceManager;
+import org.apache.pig.backend.hadoop.executionengine.shims.HadoopShims;
 import org.apache.pig.backend.hadoop.executionengine.util.MapRedUtil;
 import org.apache.pig.builtin.Utf8StorageConverter;
 import org.apache.pig.data.BagFactory;
@@ -479,6 +479,19 @@ public class Util {
         }
         fs.delete(new Path(fileName), true);
     }
+
+    /**
+     * Deletes a dfs file from the MiniCluster DFS quietly
+     *
+     * @param miniCluster the MiniCluster where the file should be deleted
+     * @param fileName the path of the file to be deleted
+     */
+     public static void deleteQuietly(MiniGenericCluster miniCluster, String fileName) {
+         try {
+             deleteFile(miniCluster, fileName);
+         } catch (IOException ignored) {
+         }
+     }
 
     static public void deleteFile(PigContext pigContext, String fileName)
     throws IOException {
@@ -1376,7 +1389,16 @@ public class Util {
 
         // For tez testing, we want to avoid TezResourceManager/LocalResource reuse
         // (when switching between local and mapreduce/tez)
-        TezResourceManager.dropInstance();
+        if( HadoopShims.isHadoopYARN() ) {
+            try {
+                java.lang.reflect.Method tez_dropInstance = Class.forName(
+                  "org.apache.pig.backend.hadoop.executionengine.tez.TezResourceManager").getDeclaredMethod(
+                  "dropInstance", (Class<?>[]) null );
+                tez_dropInstance.invoke(null);
+            } catch (Exception e){
+                throw new RuntimeException(e);
+            }
+        }
 
         // TODO: once we have Tez local mode, we can get rid of this. For now,
         // if we run this test suite in Tez mode and there are some tests

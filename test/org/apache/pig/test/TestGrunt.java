@@ -970,7 +970,6 @@ public class TestGrunt {
 
     @Test
     public void testStopOnFailure() throws Throwable {
-        Assume.assumeTrue("Skip this test for TEZ", Util.isMapredExecType(cluster.getExecType()));
         PigServer server = new PigServer(cluster.getExecType(), cluster.getProperties());
         PigContext context = server.getPigContext();
         context.getProperties().setProperty("stop.on.failure", ""+true);
