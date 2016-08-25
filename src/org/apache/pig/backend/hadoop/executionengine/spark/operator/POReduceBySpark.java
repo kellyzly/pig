@@ -21,6 +21,8 @@ import java.util.List;
 
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhysicalPlan;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POForEach;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLocalRearrange;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POPreCombinerLocalRearrange;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.Packager;
 import org.apache.pig.data.DataType;
 import org.apache.pig.impl.plan.OperatorKey;
@@ -31,12 +33,14 @@ import org.apache.pig.impl.plan.OperatorKey;
  */
 public class POReduceBySpark extends POForEach {
     private String customPartitioner;
-
+    protected POLocalRearrange lgr;
     protected Packager pkgr;
 
-    public POReduceBySpark(OperatorKey k, int rp, List<PhysicalPlan> inp, List<Boolean> isToBeFlattened, Packager pkgr){
+    public POReduceBySpark(OperatorKey k, int rp, List<PhysicalPlan> inp, List<Boolean> isToBeFlattened, Packager
+            pkgr, POLocalRearrange lgr){
         super(k, rp, inp, isToBeFlattened);
         this.pkgr = pkgr;
+        this.lgr = lgr;
     }
 
     public Packager getPkgr() {
@@ -92,5 +96,9 @@ public class POReduceBySpark extends POForEach {
 
     public void setCustomPartitioner(String customPartitioner) {
         this.customPartitioner = customPartitioner;
+    }
+
+    public POLocalRearrange getLgr() {
+        return lgr;
     }
 }

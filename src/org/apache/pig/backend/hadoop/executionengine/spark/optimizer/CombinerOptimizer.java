@@ -251,7 +251,7 @@ public class CombinerOptimizer extends SparkOpPlanVisitor {
                     // Create a reduceBy operator.
                     POReduceBySpark reduceOperator = new POReduceBySpark(cfe.getOperatorKey(), cfe
                             .getRequestedParallelism(),
-                            cfe.getInputPlans(), cfe.getToBeFlattened(), combinePack.getPkgr());
+                            cfe.getInputPlans(), cfe.getToBeFlattened(), combinePack.getPkgr(), newRearrange);
                     reduceOperator.setCustomPartitioner(glr.getCustomPartitioner());
                     fixReduceSideFE(postReduceFE, algebraicOps);
                     CombinerOptimizerUtil.changeFunc(reduceOperator, POUserFunc.INTERMEDIATE);
@@ -259,14 +259,13 @@ public class CombinerOptimizer extends SparkOpPlanVisitor {
 
                     // Add the new operators
                     phyPlan.add(reduceOperator);
-                    phyPlan.add(newRearrange);
                     phyPlan.add(mfe);
                     // Connect the new operators as follows:
                     // reduceBy (using algebraicOp.Intermediate)
-                    //   -> rearrange
                     //      -> foreach (using algebraicOp.Initial)
-                    phyPlan.connect(mfe, newRearrange);
-                    phyPlan.connect(newRearrange, reduceOperator);
+//                    phyPlan.connect(mfe, newRearrange);
+//                    phyPlan.connect(newRearrange, reduceOperator);
+                     phyPlan.connect(mfe, reduceOperator);
 
                     // Insert the reduce stage between combiner rearrange and its successor.
                     phyPlan.disconnect(combinerLocalRearrange, packageSuccessor);
