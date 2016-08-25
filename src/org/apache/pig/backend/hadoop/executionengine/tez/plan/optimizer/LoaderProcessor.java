@@ -65,11 +65,6 @@ public class LoaderProcessor extends TezOpPlanVisitor {
         this.jobConf.setBoolean("mapred.mapper.new-api", true);
         this.jobConf.setClass("mapreduce.inputformat.class",
                 PigInputFormat.class, InputFormat.class);
-        try {
-            this.jobConf.set("pig.pigContext", ObjectSerializer.serialize(pc));
-        } catch (IOException e) {
-            throw new VisitorException(e);
-        }
     }
 
     /**

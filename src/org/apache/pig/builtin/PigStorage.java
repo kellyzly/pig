@@ -250,6 +250,7 @@ LoadPushDown, LoadMetadata, StoreMetadata, OverwritableStoreFunc {
             if (signature!=null) {
                 Properties p = UDFContext.getUDFContext().getUDFProperties(this.getClass());
                 mRequiredColumns = (boolean[])ObjectSerializer.deserialize(p.getProperty(signature));
+                mLog.info("mRequiredColumns:"+Arrays.toString(mRequiredColumns));
             }
             mRequiredColumnsInitialized = true;
         }
