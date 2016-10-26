@@ -57,6 +57,8 @@ remaining=()
 includeHCatalog="";
 addJarString=-Dpig.additional.jars.uris\=;
 additionalJars="";
+isSparkMode="false";
+isSparkLocalMode="false";
 # filter command line parameter
 for f in "$@"; do
      if [[ $f == "-secretDebugCmd" || $f == "-printCmdDebug" ]]; then
@@ -70,6 +72,12 @@ for f in "$@"; do
         includeHCatalog=true;
       elif [[ "$includeHCatalog" == "true" && $f == $addJarString* ]]; then
         additionalJars=`echo $f | sed s/$addJarString//`
+      elif [[ $f == "spark" ]]; then
+        isSparkMode="true" 
+        remaining[${#remaining[@]}]="$f"
+      elif [[ $f == "spark_local" || $f == "SPARK_LOCAL" ]]; then
+        isSparkLocalMode="true"
+        remaining[${#remaining[@]}]="$f"
       else
         remaining[${#remaining[@]}]="$f"
      fi
@@ -360,6 +368,36 @@ if [ "$includeHCatalog" == "true" ]; then
   fi
   PIG_OPTS="$PIG_OPTS -Dpig.additional.jars.uris=$ADDITIONAL_CLASSPATHS"
 fi
+
+################# ADDING SPARK DEPENDENCIES ##################
+# For spark_local mode:
+if [ "$isSparkLocalMode" == "true" ]; then
+	for f in $PIG_HOME/lib/spark/*.jar; do
+	        CLASSPATH=${CLASSPATH}:$f;
+	done
+fi
+# For spark mode:
+# Please specify SPARK_HOME first so that we can locate $SPARK_HOME/lib/spark-assembly*.jar,
+# we will add spark-assembly*.jar to the classpath.
+if [ "$isSparkMode" == "true" ]; then
+	if [ -z "$SPARK_HOME" ]; then
+	   echo "Error: SPARK_HOME is not set!"  
+	   exit 1
+	fi
+	
+	# Please specify SPARK_JAR which is the hdfs path of spark-assembly*.jar to allow YARN to cache spark-assembly*.jar on nodes so that it doesn't need to be distributed each time an application runs.
+	if [ -z "$SPARK_JAR" ]; then
+	   echo "Error: SPARK_JAR is not set, SPARK_JAR stands for the hdfs location of spark-assembly*.jar. This allows YARN to cache spark-assembly*.jar on nodes so that it doesn't need to be distributed each time an application runs."  
+	   exit 1
+	fi
+	
+	if [ -n "$SPARK_HOME" ]; then
+	    echo "Using Spark Home: " ${SPARK_HOME}
+	    SPARK_ASSEMBLY_JAR=`ls ${SPARK_HOME}/lib/spark-assembly*`
+	    CLASSPATH=${CLASSPATH}:$SPARK_ASSEMBLY_JAR
+	fi
+fi
+################# ADDING SPARK DEPENDENCIES ##################
 
 # run it
 if [ -n "$HADOOP_BIN" ]; then

@@ -281,7 +281,7 @@ sub runPigCmdLine
     my @cmd = @baseCmd;
 
     # Add option -l giving location for secondary logs
-    ##!!! Should that even be here? 
+    ##!!! Should that even be here?
     my $locallog = $testCmd->{'localpath'} . $testCmd->{'group'} . "_" . $testCmd->{'num'} . ".log";
     push(@cmd, "-logfile");
     push(@cmd, $locallog);

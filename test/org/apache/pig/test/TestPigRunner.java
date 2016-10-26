@@ -55,6 +55,7 @@ import org.apache.pig.tools.pigstats.PigStats;
 import org.apache.pig.tools.pigstats.PigStatsUtil;
 import org.apache.pig.tools.pigstats.mapreduce.MRJobStats;
 import org.apache.pig.tools.pigstats.mapreduce.MRPigStatsUtil;
+import org.apache.pig.tools.pigstats.spark.SparkJobStats;
 import org.junit.AfterClass;
 import org.junit.Assume;
 import org.junit.Before;
@@ -201,6 +202,11 @@ public class TestPigRunner {
             if (execType.toString().startsWith("tez")) {
                 assertEquals(1, stats.getNumberJobs());
                 assertEquals(stats.getJobGraph().size(), 1);
+            } else if (execType.toString().startsWith("spark")) {
+                // In spark mode,the number of spark job is calculated by the number of POStore.
+                // 1 POStore generates 1 spark job.
+                assertEquals(1, stats.getNumberJobs());
+                assertEquals(stats.getJobGraph().size(), 1);
             } else {
                 assertEquals(2, stats.getNumberJobs());
                 assertEquals(stats.getJobGraph().size(), 2);
@@ -265,6 +271,10 @@ public class TestPigRunner {
                 assertEquals(stats.getJobGraph().size(), 1);
                 // 5 vertices
                 assertEquals(stats.getJobGraph().getSources().get(0).getPlan().size(), 5);
+            } else if (execType.equals("spark")) {
+                // In spark mode,the number of spark job is calculated by the number of POStore.
+                // 1 POStore generates 1 spark job.
+                assertEquals(stats.getJobGraph().size(), 1);
             } else {
                 assertEquals(stats.getJobGraph().size(), 4);
             }
@@ -285,7 +295,12 @@ public class TestPigRunner {
                 //       Need to investigate
                 // assertEquals("B", ((JobStats) stats.getJobGraph().getPredecessors(
                 //        js).get(0)).getAlias());
+            } else if (execType.equals("spark")) {
+                assertEquals("A,B", ((JobStats) stats.getJobGraph().getSources().get(
+                        0)).getAlias());
+                // TODO: alias is not set for sample-aggregation/partition/sort job.
             } else {
+
                 assertEquals("A", ((JobStats) stats.getJobGraph().getSources().get(
                         0)).getAlias());
                 assertEquals("B", ((JobStats) stats.getJobGraph().getPredecessors(
@@ -314,7 +329,14 @@ public class TestPigRunner {
             String[] args = { "-x", execType, PIG_FILE };
             PigStats stats = PigRunner.run(args, new TestNotificationListener(execType));
             assertTrue(stats.isSuccessful());
-            assertTrue(stats.getJobGraph().size() == 1);
+            if (execType.equals("spark")) {
+                // In spark mode,the number of spark job is calculated by the number of POStore.
+                // 2 POStore generates 2 spark jobs.
+                assertTrue(stats.getJobGraph().size() == 2);
+            } else {
+                assertTrue(stats.getJobGraph().size() == 1);
+            }
+
             // Each output file should include the following:
             // output:
             //   1\t2\t3\n
@@ -363,7 +385,13 @@ public class TestPigRunner {
             String[] args = { "-x", execType, PIG_FILE };
             PigStats stats = PigRunner.run(args, new TestNotificationListener(execType));
             assertTrue(stats.isSuccessful());
-            assertEquals(stats.getJobGraph().size(), 1);
+            if (execType.equals("spark")) {
+                // In spark mode,the number of spark job is calculated by the number of POStore.
+                // 2 POStore generates 2 spark jobs.
+                assertEquals(stats.getJobGraph().size(), 2);
+            } else {
+                assertEquals(stats.getJobGraph().size(), 1);
+            }
 
             // Each output file should include the following:
             // output:
@@ -426,6 +454,9 @@ public class TestPigRunner {
             assertTrue(stats.isSuccessful());
             if (Util.isMapredExecType(cluster.getExecType())) {
                 assertEquals(3, stats.getJobGraph().size());
+            } if (Util.isSparkExecType(cluster.getExecType())) {
+                // One for each store and 2 for join.
+                assertEquals(4, stats.getJobGraph().size());
             } else {
                 assertEquals(1, stats.getJobGraph().size());
             }
@@ -468,7 +499,8 @@ public class TestPigRunner {
             assertEquals(3, inputStats.get(1).getNumberRecords());
             // For mapreduce, since hdfs bytes read includes replicated tables bytes read is wrong
             // Since Tez does has only one load per job its values are correct
-            if (!Util.isMapredExecType(cluster.getExecType())) {
+            // By pass the check for spark due to PIG-4788
+            if (!Util.isMapredExecType(cluster.getExecType()) && !Util.isSparkExecType(cluster.getExecType())) {
                 assertEquals(30, inputStats.get(0).getBytes());
                 assertEquals(18, inputStats.get(1).getBytes());
             }
@@ -495,17 +527,19 @@ public class TestPigRunner {
             PigStats stats = PigRunner.run(args, null);
             Iterator<JobStats> iter = stats.getJobGraph().iterator();
             while (iter.hasNext()) {
-                 JobStats js=iter.next();
-                 if (execType.equals("tez")) {
-                     assertEquals(js.getState().name(), "FAILED");
-                 } else {
-                     if(js.getState().name().equals("FAILED")) {
-                         List<Operator> ops=stats.getJobGraph().getSuccessors(js);
-                         for(Operator op : ops ) {
-                             assertEquals(((JobStats)op).getState().toString(), "UNKNOWN");
-                         }
-                     }
-                 }
+                JobStats js=iter.next();
+                if (execType.equals("tez")) {
+                    assertEquals(js.getState().name(), "FAILED");
+                } else if (execType.equals("spark")) {
+                    assertEquals(js.getState().name(), "FAILED");
+                } else {
+                    if(js.getState().name().equals("FAILED")) {
+                        List<Operator> ops=stats.getJobGraph().getSuccessors(js);
+                        for(Operator op : ops ) {
+                            assertEquals(((JobStats)op).getState().toString(), "UNKNOWN");
+                        }
+                    }
+                }
             }
         } finally {
             new File(PIG_FILE).delete();
@@ -714,8 +748,14 @@ public class TestPigRunner {
             PigStats stats = PigRunner.run(args, new TestNotificationListener(execType));
 
             assertTrue(stats.isSuccessful());
-
-            assertEquals(1, stats.getNumberJobs());
+            //In spark mode, one POStore will generate a spark action(spark job).
+            //In this case, the sparkplan has 1 sparkOperator(after multiquery optimization) but has 2 POStores
+            //which generate 2 spark actions(spark jobs).
+            if (execType.equals("spark")) {
+                assertEquals(2, stats.getNumberJobs());
+            } else {
+                assertEquals(1, stats.getNumberJobs());
+            }
             List<OutputStats> outputs = stats.getOutputStats();
             assertEquals(2, outputs.size());
             for (OutputStats outstats : outputs) {
@@ -827,7 +867,14 @@ public class TestPigRunner {
 
             assertTrue(!stats.isSuccessful());
             assertTrue(stats.getReturnCode() != 0);
-            assertTrue(stats.getOutputStats().size() == 0);
+            if (execType.equals("spark")) {
+                //Currently, even if failed, spark engine will add a failed OutputStats,
+                // see: SparkPigStats.addFailJobStats()
+                assertTrue(stats.getOutputStats().size() == 1);
+                assertTrue(stats.getOutputStats().get(0).isSuccessful() == false);
+            } else {
+                assertTrue(stats.getOutputStats().size() == 0);
+            }
 
         } finally {
             new File(PIG_FILE).delete();
@@ -850,7 +897,14 @@ public class TestPigRunner {
 
             assertTrue(!stats.isSuccessful());
             assertTrue(stats.getReturnCode() != 0);
-            assertTrue(stats.getOutputStats().size() == 0);
+            //Currently, even if failed, spark engine will add a failed OutputStats,
+            // see: SparkPigStats.addFailJobStats()
+            if (execType.equals("spark")) {
+                assertTrue(stats.getOutputStats().size() == 1);
+                assertTrue(stats.getOutputStats().get(0).isSuccessful() == false);
+            } else {
+                assertTrue(stats.getOutputStats().size() == 0);
+            }
 
         } finally {
             new File(PIG_FILE).delete();
@@ -911,8 +965,14 @@ public class TestPigRunner {
             PigStats stats = PigRunner.run(args, new TestNotificationListener(execType));
 
             assertTrue(stats.isSuccessful());
-
-            assertEquals(1, stats.getNumberJobs());
+            //In spark mode, one POStore will generate a spark action(spark job).
+            //In this case, the sparkplan has 1 sparkOperator(after multiquery optimization) but has 2 POStores
+            //which generate 2 spark actions(spark jobs).
+            if (execType.equals("spark")) {
+                assertEquals(2, stats.getNumberJobs());
+            } else {
+                assertEquals(1, stats.getNumberJobs());
+            }
             List<OutputStats> outputs = stats.getOutputStats();
             assertEquals(2, outputs.size());
             for (OutputStats outstats : outputs) {
@@ -960,7 +1020,13 @@ public class TestPigRunner {
             List<OutputStats> outputs = stats.getOutputStats();
             assertEquals(1, outputs.size());
             OutputStats outstats = outputs.get(0);
-            assertEquals(9, outstats.getNumberRecords());
+            //In spark mode, if pig.disable.counter = true, the number of records of the
+            //output are not calculated.
+            if (execType.equals("spark")) {
+                assertEquals(-1, outstats.getNumberRecords());
+            } else {
+                assertEquals(9, outstats.getNumberRecords());
+            }
         } finally {
             new File(PIG_FILE).delete();
             Util.deleteFile(cluster, OUTPUT_FILE);
@@ -1000,6 +1066,28 @@ public class TestPigRunner {
                         MRPigStatsUtil.HDFS_BYTES_WRITTEN).getValue());
                 assertEquals(new File(INPUT_FILE).length(),counter.getGroup(FS_COUNTER_GROUP).getCounterForName(
                         MRPigStatsUtil.HDFS_BYTES_READ).getValue());
+            } else if (execType.equals("spark")) {
+                /** Uncomment code until changes of PIG-4788 are merged to master
+                //There are 2 spark jobs because of 2 POStore although the spark plan is optimized by multiquery optimization.
+                List<JobStats> jobs = stats.getJobGraph().getJobList();
+                JobStats firstJob = jobs.get(0);
+                JobStats secondJob = jobs.get(1);
+                //the hdfs_bytes_read of two spark jobs are same(because the two spark jobs have same poLoad), we only
+                //use one of those to compare with expected hdfs_bytes_read(30)
+                //we count the hdfs_bytes_written of the two spark jobs to calculate the total hdfs_bytes_written
+                long hdfs_bytes_read = 0;
+                long hdfs_bytes_written = 0;
+
+                hdfs_bytes_read += firstJob.getHadoopCounters().getGroup(SparkJobStats.FS_COUNTER_GROUP).getCounterForName(
+                        MRPigStatsUtil.HDFS_BYTES_READ).getValue();
+                hdfs_bytes_written += firstJob.getHadoopCounters().getGroup(SparkJobStats.FS_COUNTER_GROUP).getCounterForName(
+                        MRPigStatsUtil.HDFS_BYTES_WRITTEN).getValue();
+                hdfs_bytes_written += secondJob.getHadoopCounters().getGroup(SparkJobStats.FS_COUNTER_GROUP).getCounterForName(
+                        MRPigStatsUtil.HDFS_BYTES_WRITTEN).getValue();
+
+                assertEquals(30, hdfs_bytes_read);
+                assertEquals(20, hdfs_bytes_written);
+                 **/
             } else {
                 Counters counter= ((MRJobStats)stats.getJobGraph().getSinks().get(0)).getHadoopCounters();
                 assertEquals(5, counter.getGroup(MRPigStatsUtil.TASK_COUNTER_GROUP).getCounterForName(
@@ -1042,8 +1130,12 @@ public class TestPigRunner {
             PigStats stats = PigRunner.run(args, new TestNotificationListener(execType));
 
             assertTrue(stats.isSuccessful());
-
-            assertEquals(1, stats.getNumberJobs());
+            if (execType.equals("spark")) {
+                //2 POStore generates 2 spark jobs
+                assertEquals(2, stats.getNumberJobs());
+            } else {
+                assertEquals(1, stats.getNumberJobs());
+            }
             List<OutputStats> outputs = stats.getOutputStats();
             assertEquals(2, outputs.size());
             if (execType.equals("tez")) {
@@ -1059,7 +1151,11 @@ public class TestPigRunner {
             List<InputStats> inputs = stats.getInputStats();
             assertEquals(1, inputs.size());
             InputStats instats = inputs.get(0);
-            assertEquals(5, instats.getNumberRecords());
+            if (execType.equals("spark")) {
+                assertEquals(-1, instats.getNumberRecords());
+            } else {
+                assertEquals(5, instats.getNumberRecords());
+            }
         } finally {
             new File(PIG_FILE).delete();
             Util.deleteFile(cluster, OUTPUT_FILE);

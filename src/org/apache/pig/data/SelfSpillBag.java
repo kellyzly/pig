@@ -29,7 +29,9 @@ import org.apache.pig.classification.InterfaceStability;
 @InterfaceStability.Evolving
 public abstract class SelfSpillBag extends DefaultAbstractBag {
     private static final long serialVersionUID = 1L;
-    protected MemoryLimits memLimit;
+    // SelfSpillBag$MemoryLimits is not serializable
+    // in spark mode, if we don't set memLimit transient, it will throw NotSerializableExecption(See PIG-4611)
+    protected transient MemoryLimits memLimit;
 
     public SelfSpillBag(int bagCount) {
         memLimit = new MemoryLimits(bagCount, -1);

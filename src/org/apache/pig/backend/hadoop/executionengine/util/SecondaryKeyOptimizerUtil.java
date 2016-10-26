@@ -35,12 +35,15 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOpe
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.PODistinct;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POFilter;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POForEach;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POGlobalRearrange;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLimit;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLocalRearrange;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POPackage;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POSort;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POSortedDistinct;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POUnion;
+import org.apache.pig.backend.hadoop.executionengine.spark.operator.POGlobalRearrangeSpark;
+import org.apache.pig.backend.hadoop.executionengine.spark.operator.POReduceBySpark;
 import org.apache.pig.classification.InterfaceAudience;
 import org.apache.pig.data.DataType;
 import org.apache.pig.impl.io.PigNullableWritable;
@@ -53,6 +56,7 @@ import org.apache.pig.impl.plan.VisitorException;
 @InterfaceAudience.Private
 public class SecondaryKeyOptimizerUtil {
     private static Log log = LogFactory.getLog(SecondaryKeyOptimizerUtil.class.getName());
+    private static boolean isSparkMode;
 
     private SecondaryKeyOptimizerUtil() {
 
@@ -241,14 +245,33 @@ public class SecondaryKeyOptimizerUtil {
         }
 
         PhysicalOperator root = reduceRoots.get(0);
-        if (!(root instanceof POPackage)) {
-            log.debug("Expected reduce root to be a POPackage, skip secondary key optimizing");
-            return null;
+        PhysicalOperator currentNode = null;
+        if (!isSparkMode) {
+            if (!(root instanceof POPackage)) {
+                log.debug("Expected reduce root to be a POPackage, skip secondary key optimizing");
+                return null;
+            } else {
+                currentNode = root;
+            }
+        } else {
+            if (!(root instanceof POGlobalRearrange)) {
+                log.debug("Expected reduce root to be a POGlobalRearrange, skip secondary key optimizing");
+                return null;
+            } else {
+                List<PhysicalOperator> globalRearrangeSuccs = reducePlan
+                        .getSuccessors(root);
+                if (globalRearrangeSuccs.size() == 1) {
+                    currentNode = globalRearrangeSuccs.get(0);
+                } else {
+                    log.debug("Expected successor of a POGlobalRearrange is POPackage, skip secondary key optimizing");
+                    return null;
+                }
+            }
         }
 
         // visit the POForEach of the reduce plan. We can have Limit and Filter
         // in the middle
-        PhysicalOperator currentNode = root;
+
         POForEach foreach = null;
         while (currentNode != null) {
             if (currentNode instanceof POPackage
@@ -402,8 +425,19 @@ public class SecondaryKeyOptimizerUtil {
                     throw new VisitorException("Cannot find POLocalRearrange to set secondary plan", errorCode);
                 }
             }
-            POPackage pack = (POPackage) root;
-            pack.getPkgr().setUseSecondaryKey(true);
+
+            if (root instanceof POGlobalRearrangeSpark) {
+                POGlobalRearrangeSpark plg = (POGlobalRearrangeSpark) root;
+                plg.setUseSecondaryKey(true);
+                plg.setSecondarySortOrder(secondarySortKeyInfo.getAscs());
+            } else if (root instanceof POPackage) {
+                POPackage pack = (POPackage) root;
+                pack.getPkgr().setUseSecondaryKey(true);
+            } else if (root instanceof POReduceBySpark) {
+                POReduceBySpark reduceBySpark = (POReduceBySpark) root;
+                reduceBySpark.setUseSecondaryKey(true);
+                reduceBySpark.setSecondarySortOrder(secondarySortKeyInfo.getAscs());
+            }
         }
         return secKeyOptimizerInfo;
     }
@@ -658,4 +692,7 @@ public class SecondaryKeyOptimizerUtil {
         return false;
     }
 
+    public static void setIsSparkMode(boolean isSparkMode) {
+        SecondaryKeyOptimizerUtil.isSparkMode = isSparkMode;
+    }
 }
