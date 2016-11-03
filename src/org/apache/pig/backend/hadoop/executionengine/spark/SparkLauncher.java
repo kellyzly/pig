@@ -166,10 +166,9 @@ public class SparkLauncher extends Launcher {
         // Set a unique group id for this query, so we can lookup all Spark job
         // ids
         // related to this query.
-        jobGroupID = String.format("%s-%s",sparkContext.getConf().getAppId(),UUID.randomUUID().toString());
-        jobConf.set(MRConfiguration.JOB_ID,jobGroupID);
-
-        sparkContext.setJobGroup(jobGroupID, "Pig query to Spark cluster", false);
+        jobGroupID = UUID.randomUUID().toString();
+        sparkContext.setJobGroup(jobGroupID, "Pig query to Spark cluster",
+                false);
         jobMetricsListener.reset();
 
         this.currentDirectoryPath = Paths.get(".").toAbsolutePath()
