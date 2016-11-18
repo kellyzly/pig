@@ -45,6 +45,7 @@ import org.apache.pig.backend.BackendException;
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.hadoop.datastorage.ConfigurationUtil;
 import org.apache.pig.backend.hadoop.executionengine.Launcher;
+import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MRConfiguration;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigMapReduce;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhysicalPlan;
@@ -165,9 +166,10 @@ public class SparkLauncher extends Launcher {
         // Set a unique group id for this query, so we can lookup all Spark job
         // ids
         // related to this query.
-        jobGroupID = UUID.randomUUID().toString();
-        sparkContext.setJobGroup(jobGroupID, "Pig query to Spark cluster",
-                false);
+        jobGroupID = String.format("%s-%s",sparkContext.getConf().getAppId(),UUID.randomUUID().toString());
+        jobConf.set(MRConfiguration.JOB_ID,jobGroupID);
+
+        sparkContext.setJobGroup(jobGroupID, "Pig query to Spark cluster", false);
         jobMetricsListener.reset();
 
         this.currentDirectoryPath = Paths.get(".").toAbsolutePath()
