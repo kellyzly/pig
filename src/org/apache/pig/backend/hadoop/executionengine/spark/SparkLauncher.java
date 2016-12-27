@@ -166,17 +166,10 @@ public class SparkLauncher extends Launcher {
 
         startSparkIfNeeded(pigContext);
 
-<<<<<<< HEAD
-        // Set a unique group id for this query, so we can lookup all Spark job
-        // ids
-        // related to this query.
-        jobGroupID = UUID.randomUUID().toString();
-=======
         jobGroupID = String.format("%s-%s",sparkContext.getConf().getAppId(),
                 UUID.randomUUID().toString());
         jobConf.set(MRConfiguration.JOB_ID,jobGroupID);
 
->>>>>>> PIG-5052: Initialize Initialize MRConfiguration.JOB_ID in spark mode correctly (Adam Szita via Xuefu)
         sparkContext.setJobGroup(jobGroupID, "Pig query to Spark cluster",
                 false);
         jobMetricsListener.reset();
