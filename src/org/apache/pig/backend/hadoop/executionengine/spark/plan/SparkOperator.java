@@ -66,6 +66,9 @@ public class SparkOperator extends Operator<SparkOpPlanVisitor> {
 
 	public Set<PhysicalOperator> scalars;
 
+    // Indicates if a UDF comparator is used
+    boolean isUDFComparatorUsed = false;
+
 	public int requestedParallelism = -1;
 
     private BitSet feature = new BitSet();
@@ -83,6 +86,12 @@ public class SparkOperator extends Operator<SparkOpPlanVisitor> {
 	private List<String> crossKeys = null;
 
     private MultiMap<OperatorKey, OperatorKey> multiQueryOptimizeConnectionMap = new MultiMap<OperatorKey, OperatorKey>();
+
+    //The quantiles file name if globalSort is true
+    private String quantFile;
+
+    //Indicates if this job is an order by job
+    boolean globalSort = false;
 
     public SparkOperator(OperatorKey k) {
         super(k);
@@ -277,4 +286,13 @@ public class SparkOperator extends Operator<SparkOpPlanVisitor> {
     public MultiMap<OperatorKey, OperatorKey> getMultiQueryOptimizeConnectionItem() {
         return multiQueryOptimizeConnectionMap;
     }
+
+    public void setGlobalSort(boolean globalSort) {
+        this.globalSort = globalSort;
+    }
+
+    public boolean isGlobalSort() {
+        return globalSort;
+    }
+
 }
