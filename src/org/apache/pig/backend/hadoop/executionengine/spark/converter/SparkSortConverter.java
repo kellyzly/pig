@@ -74,20 +74,22 @@ public class SparkSortConverter implements RDDConverter<Tuple, Tuple, POSparkSor
 
         @Override
         public Tuple call(Tuple v1, Tuple v2) {
-            try {
+ //           try {
                 Tuple res = tf.newTuple();
-                for (int i = 0; i < v1.size(); i++) {
-                    res.append(v1.get(i));
-                }
+                res.append(v1);
+                res.append(v2);
+//                for (int i = 0; i < v1.size(); i++) {
+//                    res.append(v1.get(i));
+//                }
 
-                for (int i = 0; i < v2.size(); i++) {
-                    res.append(v2.get(i));
-                }
+//                for (int i = 0; i < v2.size(); i++) {
+//                    res.append(v2.get(i));
+//                }
                 LOG.info("MergeFunction out:"+res);
                 return res;
-            } catch (ExecException e) {
-                throw new RuntimeException("SparkSortConverter#MergeFunction throws exception ", e);
-            }
+//            } catch (ExecException e) {
+//                throw new RuntimeException("SparkSortConverter#MergeFunction throws exception ", e);
+//            }
         }
     }
 
@@ -127,13 +129,10 @@ public class SparkSortConverter implements RDDConverter<Tuple, Tuple, POSparkSor
             Tuple res = tf.newTuple();
             res.append(next._1());
             Tuple sampleTuple = next._2();
-            List<Tuple> samples = new ArrayList<Tuple>();
+            DataBag bag = bf.newDefaultBag();
             for (int i = 0; i < sampleTuple.size(); i++) {
-                Tuple t = tf.newTuple();
-                t.append(sampleTuple.get(i));
-                samples.add(t);
+               bag.add((Tuple)sampleTuple.get(i));
             }
-            DataBag bag = bf.newDefaultBag(samples);
             res.append(bag);
             LOG.info("ToValueFunction out:" + res);
             return res;

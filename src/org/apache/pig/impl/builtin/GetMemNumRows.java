@@ -20,6 +20,8 @@ package org.apache.pig.impl.builtin;
 import java.io.IOException;
 import java.lang.reflect.Type;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.pig.EvalFunc;
 import org.apache.pig.data.SizeUtil;
 import org.apache.pig.data.Tuple;
@@ -32,8 +34,10 @@ import org.apache.pig.data.TupleFactory;
  * 
  */
 
-public class GetMemNumRows extends EvalFunc<Tuple>{          
+public class GetMemNumRows extends EvalFunc<Tuple>{
 
+
+    private static final Log LOG = LogFactory.getLog(GetMemNumRows.class);
     private TupleFactory factory;
 	
     public GetMemNumRows() {
@@ -65,6 +69,7 @@ public class GetMemNumRows extends EvalFunc<Tuple>{
     	Tuple t = factory.newTuple(2);
     	t.set(0, memSize);
     	t.set(1, numRows);
+        LOG.info(t.toString());
     	return t;
     }
     
