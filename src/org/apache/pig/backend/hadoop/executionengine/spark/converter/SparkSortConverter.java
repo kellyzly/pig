@@ -64,8 +64,9 @@ public class SparkSortConverter implements RDDConverter<Tuple, Tuple, POSparkSor
         JavaPairRDD<Tuple, Object> sorted = r.sortByKey(true);
 
         JavaPairRDD<String, Tuple> mapped = sorted.mapPartitionsToPair(new AggregateFunction());
-        JavaRDD<Tuple> reduceByKey = mapped.reduceByKey(new MergeFunction()).map(new ToValueFunction());
-        return reduceByKey.rdd();
+        //JavaRDD<Tuple> reduceByKey = mapped.reduceByKey(new MergeFunction()).map(new ToValueFunction());
+        JavaRDD<Tuple> groupByKey= mapped.groupByKey().map(new ToValueFunction1());
+        return  groupByKey.rdd();
     }
 
 
@@ -110,6 +111,7 @@ public class SparkSortConverter implements RDDConverter<Tuple, Tuple, POSparkSor
                 return new IteratorTransform<Tuple2<Tuple, Object>, Tuple2<String,Tuple>>(in) {
                     @Override
                     protected Tuple2<String,Tuple> transform(Tuple2<Tuple, Object> next) {
+                        LOG.info("AggregateFunction in:"+ next._1()) ;
                         return new Tuple2<String,Tuple>("all",next._1());
                     }
                 };
@@ -140,6 +142,23 @@ public class SparkSortConverter implements RDDConverter<Tuple, Tuple, POSparkSor
     }
 
 
+    private static class ToValueFunction1 implements Function<Tuple2<String, Iterable<Tuple>>, Tuple> {
+        @Override
+        public Tuple call(Tuple2<String, Iterable<Tuple>> next) throws Exception {
+            Tuple res = tf.newTuple();
+            res.append(next._1());
+            Iterator<Tuple> iter = next._2().iterator();
+            DataBag bag = bf.newDefaultBag();
+            while(iter.hasNext()) {
+                bag.add(iter.next());
+            }
+            res.append(bag);
+            LOG.info("ToValueFunction1 out:" + res);
+            return res;
+        }
+    }
+
+
     private static class ToKeyValueFunction extends
             AbstractFunction1<Tuple, Tuple2<Tuple, Object>> implements
             Serializable {
@@ -147,14 +166,14 @@ public class SparkSortConverter implements RDDConverter<Tuple, Tuple, POSparkSor
         @Override
         public Tuple2<Tuple, Object> apply(Tuple t) {
             if (LOG.isDebugEnabled()) {
-                LOG.debug("Sort ToKeyValueFunction in " + t);
+                LOG.info("Sort ToKeyValueFunction in " + t);
             }
             Tuple key = t;
             Object value = null;
             // (key, value)
             Tuple2<Tuple, Object> out = new Tuple2<Tuple, Object>(key, value);
             if (LOG.isDebugEnabled()) {
-                LOG.debug("Sort ToKeyValueFunction out " + out);
+                LOG.info("Sort ToKeyValueFunction out " + out);
             }
             return out;
         }
