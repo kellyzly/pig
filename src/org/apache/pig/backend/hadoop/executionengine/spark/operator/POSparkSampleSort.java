@@ -23,12 +23,9 @@ import org.apache.pig.data.DataType;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.impl.plan.VisitorException;
 
-/**
- * Use rdd.sortByKey to sort
- */
-public class POSparkSort extends POSort {
+public class POSparkSampleSort extends POSort {
 
-    public POSparkSort(POSort sort){
+    public POSparkSampleSort(POSort sort){
         super(sort.getOperatorKey(), sort.getRequestedParallelism(), null, sort.getSortPlans(), sort.getMAscCols(), sort
                 .getMSortFunc());
     }

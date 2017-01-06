@@ -95,7 +95,7 @@ import org.apache.pig.backend.hadoop.executionengine.spark.converter.RankConvert
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.ReduceByConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.SkewedJoinConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.SortConverter;
-import org.apache.pig.backend.hadoop.executionengine.spark.converter.SparkSortConverter;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.SparkSampleSortConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.SplitConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.StoreConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.StreamConverter;
@@ -103,7 +103,7 @@ import org.apache.pig.backend.hadoop.executionengine.spark.converter.UnionConver
 import org.apache.pig.backend.hadoop.executionengine.spark.operator.POGlobalRearrangeSpark;
 import org.apache.pig.backend.hadoop.executionengine.spark.operator.POJoinGroupSpark;
 import org.apache.pig.backend.hadoop.executionengine.spark.operator.POReduceBySpark;
-import org.apache.pig.backend.hadoop.executionengine.spark.operator.POSparkSort;
+import org.apache.pig.backend.hadoop.executionengine.spark.operator.POSparkSampleSort;
 import org.apache.pig.backend.hadoop.executionengine.spark.optimizer.AccumulatorOptimizer;
 import org.apache.pig.backend.hadoop.executionengine.spark.optimizer.CombinerOptimizer;
 import org.apache.pig.backend.hadoop.executionengine.spark.optimizer.JoinGroupOptimizerSpark;
@@ -216,7 +216,7 @@ public class SparkLauncher extends Launcher {
         convertMap.put(POMergeCogroup.class, new MergeCogroupConverter());
         convertMap.put(POReduceBySpark.class, new ReduceByConverter());
         convertMap.put(POPreCombinerLocalRearrange.class, new LocalRearrangeConverter());
-        convertMap.put(POSparkSort.class, new SparkSortConverter());
+        convertMap.put(POSparkSampleSort.class, new SparkSampleSortConverter());
         convertMap.put(POBroadcastSpark.class, new BroadcastConverter(sparkContext));
         convertMap.put(POPoissonSampleSpark.class, new PoissonSampleConverter());
 

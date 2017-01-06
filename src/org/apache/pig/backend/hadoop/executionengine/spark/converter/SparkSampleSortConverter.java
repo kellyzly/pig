@@ -31,7 +31,7 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POSort;
 import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
-import org.apache.pig.backend.hadoop.executionengine.spark.operator.POSparkSort;
+import org.apache.pig.backend.hadoop.executionengine.spark.operator.POSparkSampleSort;
 import org.apache.pig.data.BagFactory;
 import org.apache.pig.data.DataBag;
 import org.apache.pig.data.DefaultBagFactory;
@@ -42,15 +42,18 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.PairFlatMapFunction;
 import org.apache.spark.rdd.RDD;
+  /*
+   sort the sample data and convert the sample data to the format (all,{(sampleEle1),(sampleEle2),...})
 
+   */
 @SuppressWarnings("serial")
-public class SparkSortConverter implements RDDConverter<Tuple, Tuple, POSparkSort> {
-    private static final Log LOG = LogFactory.getLog(SparkSortConverter.class);
+public class SparkSampleSortConverter implements RDDConverter<Tuple, Tuple, POSparkSampleSort> {
+    private static final Log LOG = LogFactory.getLog(SparkSampleSortConverter.class);
     private static TupleFactory tf = TupleFactory.getInstance();
     private static BagFactory bf = DefaultBagFactory.getInstance();
 
     @Override
-    public RDD<Tuple> convert(List<RDD<Tuple>> predecessors, POSparkSort sortOperator)
+    public RDD<Tuple> convert(List<RDD<Tuple>> predecessors, POSparkSampleSort sortOperator)
             throws IOException {
         SparkUtil.assertPredecessorSize(predecessors, sortOperator, 1);
         RDD<Tuple> rdd = predecessors.get(0);
@@ -60,12 +63,12 @@ public class SparkSortConverter implements RDDConverter<Tuple, Tuple, POSparkSor
         JavaPairRDD<Tuple, Object> r = new JavaPairRDD<Tuple, Object>(rddPair,
                 SparkUtil.getManifest(Tuple.class),
                 SparkUtil.getManifest(Object.class));
-
+         //sort sample data
         JavaPairRDD<Tuple, Object> sorted = r.sortByKey(true);
-
+         //convert every element in sample data from element to (all, element) format
         JavaPairRDD<String, Tuple> mapped = sorted.mapPartitionsToPair(new AggregateFunction());
-        //JavaRDD<Tuple> reduceByKey = mapped.reduceByKey(new MergeFunction()).map(new ToValueFunction());
-        JavaRDD<Tuple> groupByKey= mapped.groupByKey().map(new ToValueFunction1());
+        //use groupByKey to aggregate all values( the format will be ((all),{(sampleEle1),(sampleEle2),...} )
+        JavaRDD<Tuple> groupByKey= mapped.groupByKey().map(new ToValueFunction());
         return  groupByKey.rdd();
     }
 
@@ -75,22 +78,11 @@ public class SparkSortConverter implements RDDConverter<Tuple, Tuple, POSparkSor
 
         @Override
         public Tuple call(Tuple v1, Tuple v2) {
- //           try {
                 Tuple res = tf.newTuple();
                 res.append(v1);
                 res.append(v2);
-//                for (int i = 0; i < v1.size(); i++) {
-//                    res.append(v1.get(i));
-//                }
-
-//                for (int i = 0; i < v2.size(); i++) {
-//                    res.append(v2.get(i));
-//                }
                 LOG.info("MergeFunction out:"+res);
                 return res;
-//            } catch (ExecException e) {
-//                throw new RuntimeException("SparkSortConverter#MergeFunction throws exception ", e);
-//            }
         }
     }
 
@@ -125,24 +117,7 @@ public class SparkSortConverter implements RDDConverter<Tuple, Tuple, POSparkSor
 
     }
 
-    private static class ToValueFunction implements Function<Tuple2<String, Tuple>, Tuple> {
-        @Override
-        public Tuple call(Tuple2<String, Tuple> next) throws Exception {
-            Tuple res = tf.newTuple();
-            res.append(next._1());
-            Tuple sampleTuple = next._2();
-            DataBag bag = bf.newDefaultBag();
-            for (int i = 0; i < sampleTuple.size(); i++) {
-               bag.add((Tuple)sampleTuple.get(i));
-            }
-            res.append(bag);
-            LOG.info("ToValueFunction out:" + res);
-            return res;
-        }
-    }
-
-
-    private static class ToValueFunction1 implements Function<Tuple2<String, Iterable<Tuple>>, Tuple> {
+    private static class ToValueFunction implements Function<Tuple2<String, Iterable<Tuple>>, Tuple> {
         @Override
         public Tuple call(Tuple2<String, Iterable<Tuple>> next) throws Exception {
             Tuple res = tf.newTuple();
@@ -157,7 +132,6 @@ public class SparkSortConverter implements RDDConverter<Tuple, Tuple, POSparkSor
             return res;
         }
     }
-
 
     private static class ToKeyValueFunction extends
             AbstractFunction1<Tuple, Tuple2<Tuple, Object>> implements

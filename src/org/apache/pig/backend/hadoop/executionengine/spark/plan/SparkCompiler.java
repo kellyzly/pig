@@ -80,7 +80,7 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.util.PlanHelp
 import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
 import org.apache.pig.backend.hadoop.executionengine.spark.operator.NativeSparkOperator;
 import org.apache.pig.backend.hadoop.executionengine.spark.operator.POGlobalRearrangeSpark;
-import org.apache.pig.backend.hadoop.executionengine.spark.operator.POSparkSort;
+import org.apache.pig.backend.hadoop.executionengine.spark.operator.POSparkSampleSort;
 import org.apache.pig.data.DataType;
 import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.builtin.DefaultIndexableLoader;
@@ -704,7 +704,7 @@ public class SparkCompiler extends PhyPlanVisitor {
         sampleOperator.physicalPlan.addAsLeaf(nfe1);
 
         //sort the sample
-        POSparkSort poSparkSort = new POSparkSort(sort);
+        POSparkSampleSort poSparkSort = new POSparkSampleSort(sort);
         sampleOperator.physicalPlan.addAsLeaf(poSparkSort);
 
         // for the foreach
