@@ -23,7 +23,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -45,12 +44,13 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOpera
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.expressionOperators.ConstantExpression;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhyPlanVisitor;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhysicalPlan;
-import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POFRJoin;
+import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POBroadcastSpark;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POMergeJoin;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POPoissonSampleSpark;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POSplit;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POStore;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.util.PlanHelper;
+import org.apache.pig.backend.hadoop.executionengine.spark.converter.FRJoinConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.RDDConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.SkewedJoinConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.operator.NativeSparkOperator;
@@ -60,7 +60,6 @@ import org.apache.pig.backend.hadoop.executionengine.spark.plan.SparkOperPlan;
 import org.apache.pig.backend.hadoop.executionengine.spark.plan.SparkOperator;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.impl.PigContext;
-import org.apache.pig.impl.io.FileSpec;
 import org.apache.pig.impl.plan.DependencyOrderWalker;
 import org.apache.pig.impl.plan.DepthFirstWalker;
 import org.apache.pig.impl.plan.OperatorKey;
@@ -106,7 +105,6 @@ public class JobGraphBuilder extends SparkOpPlanVisitor {
     public void visitSparkOp(SparkOperator sparkOp) throws VisitorException {
         new PhyPlanSetter(sparkOp.physicalPlan).visit();
         try {
-            setReplicationForFRJoin(sparkOp.physicalPlan);
             setReplicationForMergeJoin(sparkOp.physicalPlan);
             sparkOperToRDD(sparkOp);
             finishUDFs(sparkOp.physicalPlan);
@@ -121,26 +119,8 @@ public class JobGraphBuilder extends SparkOpPlanVisitor {
         }
     }
 
-    private void setReplicationForFRJoin(PhysicalPlan plan) throws IOException {
-        List<Path> filesForMoreReplication = new ArrayList<Path>();
-        List<POFRJoin> pofrJoins = PlanHelper.getPhysicalOperators(plan, POFRJoin.class);
-        if (pofrJoins.size() > 0) {
-            for (POFRJoin pofrJoin : pofrJoins) {
-                FileSpec[] fileSpecs = pofrJoin.getReplFiles();
-                if (fileSpecs != null) {
-                    for (int i = 0; i < fileSpecs.length; i++) {
-                        if (i != pofrJoin.getFragment()) {
-                            filesForMoreReplication.add(new Path(fileSpecs[i].getFileName()));
-                        }
-                    }
-                }
-            }
-        }
-        setReplicationForFiles(filesForMoreReplication);
-    }
-
     private void setReplicationForMergeJoin(PhysicalPlan plan) throws IOException {
-        List<Path> filesForMoreReplication = new ArrayList<Path>();
+        List<Path> filesForMoreReplication = new ArrayList<>();
         List<POMergeJoin> poMergeJoins = PlanHelper.getPhysicalOperators(plan, POMergeJoin.class);
         if (poMergeJoins.size() > 0) {
             for (POMergeJoin poMergeJoin : poMergeJoins) {
@@ -264,7 +244,6 @@ public class JobGraphBuilder extends SparkOpPlanVisitor {
             }
         }
 
-
         if (physicalOperator instanceof POSplit) {
             List<PhysicalPlan> successorPlans = ((POSplit) physicalOperator).getPlans();
             for (PhysicalPlan successPlan : successorPlans) {
@@ -293,6 +272,11 @@ public class JobGraphBuilder extends SparkOpPlanVisitor {
                 skewedJoinConverter.setSkewedJoinPartitionFile(sparkOperator.getSkewedJoinPartitionFile());
             }
             adjustRuntimeParallelismForSkewedJoin(physicalOperator, sparkOperator, allPredRDDs);
+
+            if (converter instanceof FRJoinConverter) {
+                setReplicatedInputs(physicalOperator, (FRJoinConverter) converter);
+            }
+
             nextRDD = converter.convert(allPredRDDs, physicalOperator);
 
             if (nextRDD == null) {
@@ -303,6 +287,16 @@ public class JobGraphBuilder extends SparkOpPlanVisitor {
 
             physicalOpRdds.put(physicalOperator.getOperatorKey(), nextRDD);
         }
+    }
+
+    private void setReplicatedInputs(PhysicalOperator physicalOperator, FRJoinConverter converter) {
+        Set<String> replicatedInputs = new HashSet<>();
+        for (PhysicalOperator operator : physicalOperator.getInputs()) {
+            if (operator instanceof POBroadcastSpark) {
+                replicatedInputs.add(((POBroadcastSpark) operator).getBroadcastedVariableName());
+            }
+        }
+        converter.setReplicatedInputs(replicatedInputs);
     }
 
     private List<PhysicalOperator> getPredecessors(PhysicalPlan plan, PhysicalOperator op) {
