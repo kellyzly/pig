@@ -102,7 +102,7 @@
     <property name="test.build.classes" value="${test.build.dir}/classes" />
     <property name="test.log.dir" value="${test.build.dir}/logs" />
     <property name="test.timeout" value="7200000" />
-    <property name="test.junit.output.format" value="plain" />
+    <property name="test.junit.output.format" value="xml" />
     <property name="test.commit.file" value="${test.src.dir}/commit-tests"/>
     <property name="test.unit.file" value="${test.src.dir}/unit-tests"/>
     <property name="test.smoke.file" value="${test.src.dir}/smoke-tests"/>
