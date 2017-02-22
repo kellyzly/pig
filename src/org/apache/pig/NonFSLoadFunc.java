@@ -18,8 +18,8 @@
 package org.apache.pig;
 
 /**
- *  * Marker interface to distinguish LoadFunc implementations that don't use file system sources.
- *   */
+ * Marker interface to distinguish LoadFunc implementations that don't use file system sources.
+*/
 public interface NonFSLoadFunc {
 
 }
