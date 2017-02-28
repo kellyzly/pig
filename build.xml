@@ -102,7 +102,7 @@
     <property name="test.build.classes" value="${test.build.dir}/classes" />
     <property name="test.log.dir" value="${test.build.dir}/logs" />
     <property name="test.timeout" value="7200000" />
-    <property name="test.junit.output.format" value="plain" />
+    <property name="test.junit.output.format" value="xml" />
     <property name="test.commit.file" value="${test.src.dir}/commit-tests"/>
     <property name="test.unit.file" value="${test.src.dir}/unit-tests"/>
     <property name="test.smoke.file" value="${test.src.dir}/smoke-tests"/>
@@ -1623,6 +1623,7 @@
      </target>
 
      <target name="ivy-download" description="To download ivy" unless="offline">
+     <setproxy proxyhost="child-prc.intel.com" proxyport="913"/>
         <get src="${ivy_repo_url}" dest="${ivy.jar}" usetimestamp="true"/>
      </target>
 
@@ -1654,6 +1655,7 @@
      </target>
 
      <target name="ivy-resolve" depends="ivy-init" unless="ivy.resolved" description="Resolve Ivy dependencies">
+     <setproxy proxyhost="child-prc.intel.com" proxyport="913"/>
        <property name="ivy.resolved" value="true"/>
        <echo>*** Ivy resolve with Hadoop ${hadoopversion} and HBase ${hbaseversion} ***</echo>
        <ivy:resolve log="${loglevel}" settingsRef="${ant.project.name}.ivy.settings" conf="compile"/>
