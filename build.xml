@@ -331,7 +331,7 @@
             <fileset dir="${ivy.lib.dir}">
                 <include name="**.*jar"/>
             </fileset>
-            <fileset dir="${build.ivy.spark.lib.dir}/${ant.project.name}">
+            <fileset dir="${build.ivy.spark.lib.dir}">
                 <include name="**.*jar"/>
             </fileset>
         </path>
@@ -365,7 +365,7 @@
         <path refid="compile.classpath"/>
         <fileset file="${ivy.lib.dir}/${zookeeper.jarfile}"/>
         <fileset dir="${ivy.lib.dir}" includes="*.jar"/>
-        <fileset dir="${build.ivy.spark.lib.dir}/${ant.project.name}" includes="*.jar"/>
+        <fileset dir="${build.ivy.spark.lib.dir}" includes="*.jar"/>
     </path>
 
     <!-- javadoc-classpath -->
@@ -735,7 +735,7 @@
     <target name="copySparkDependencies">
         <mkdir dir="${spark.lib.dir}" />
         <copy todir="${spark.lib.dir}">
-            <fileset dir="${build.ivy.spark.lib.dir}/${ant.project.name}" includes="*.jar"/>
+            <fileset dir="${build.ivy.spark.lib.dir}" includes="*.jar"/>
         </copy>
     </target>
     
@@ -967,6 +967,59 @@
         <antcall target="test-core" inheritRefs="true" inheritall="true"/>
     </target>
 
+ <target name="test-spark-single" depends="setSparkEnv,setWindowsPath,setLinuxPath,compile-test,jar,debugger.check,jackson-pig-3039-test-download" description="Run single spark unit test in Spark local mode">
+    <!--<target name="test-spark-single" depends="setSparkEnv" description="Run single spark unit test in Spark local mode"> -->
+        <macro-test-single tests.failed="test-spark.failed" testClass="${testClass}" testMethods="${testMethods}" single="${single}"/>
+        <fail if="test-spark.failed">Tests failed!</fail>
+    </target>
+    <macrodef name="macro-test-single">
+        <attribute name="testClass" />
+        <attribute name="testMethods" />
+        <attribute name="tests.failed" />
+        <attribute name="single" />
+        <sequential>
+            <delete dir="${test.log.dir}"/>
+            <mkdir dir="${test.log.dir}"/>
+            <tempfile property="junit.tmp.dir" prefix="pig_junit_tmp" destDir="${java.io.tmpdir}" />
+            <mkdir dir="${junit.tmp.dir}/"/>
+            <propertycopy name="test.exclude.file.for.exectype" from="test.exclude.file.${test.exec.type}"/>
+            <echo>Tests in ${test.exclude.file.for.exectype} will be excluded</echo>
+            <junit showoutput="${test.output}" printsummary="yes" haltonfailure="no" fork="yes" maxmemory="2048m" dir="${basedir}" timeout="${test.timeout}" errorProperty="@{tests.failed}" failureProperty="@{tests.failed}">
+                <sysproperty key="hadoopversion" value="${hadoopversion}" />
+                <sysproperty key="test.exec.type" value="${test.exec.type}" />
+                <sysproperty key="ssh.gateway" value="${ssh.gateway}" />
+                <sysproperty key="hod.server" value="${hod.server}" />
+                <sysproperty key="java.io.tmpdir" value="${junit.tmp.dir}" />
+                <sysproperty key="hadoop.log.dir" value="${test.log.dir}"/>
+                <jvmarg line="-XX:+CMSClassUnloadingEnabled -XX:MaxPermSize=128M ${debugArgs} -Djava.library.path=${hadoop.root}\bin"/>
+                <sysproperty key="java.security.krb5.realm" value="" />
+                <sysproperty key="java.security.krb5.kdc" value="" />
+                <sysproperty key="log4j.configuration" value="file:${basedir}/conf/test-log4j.properties"/>
+                <env key="MALLOC_ARENA_MAX" value="4"/>
+                <env key="PATH" path="${build.path}"/>
+                <classpath>
+                    <pathelement location="${output.jarfile.core}" />
+                    <fileset dir="lib">
+                        <include name="**/*.jar"/>
+                    </fileset>
+                    <pathelement location="${test.build.classes}" />
+                    <pathelement location="." />
+                    <pathelement path="${clover.jar}"/>
+                    <path refid="test.classpath"/>
+                </classpath>
+                <formatter type="${test.junit.output.format}" />
+
+
+                <test fork="yes" todir="${test.log.dir}" name="${testClass}" methods="${testMethods}" if="${single}" ></test>
+                <test fork="yes" todir="${test.log.dir}" name="${testClass}" unless="${single}" ></test>
+                <assertions>
+                    <enable />
+                </assertions>
+
+            </junit>
+            <delete dir="${junit.tmp.dir}/"/>
+        </sequential>
+    </macrodef>
     <target name="test-core-mrtez" description="run core tests on both mr and tez mode"
             depends="setWindowsPath,setLinuxPath,compile-test,jar,debugger.check,jackson-pig-3039-test-download">
         <fail message="hadoopversion must be set to 2 when invoking test-core-mrtez">
@@ -1670,7 +1723,7 @@
        <ivy:retrieve settingsRef="${ant.project.name}.ivy.settings" log="${loglevel}"
                  pattern="${build.ivy.lib.dir}/${ivy.artifact.retrieve.pattern}" conf="compile"/>
        <ivy:retrieve settingsRef="${ant.project.name}.ivy.settings" log="${loglevel}"
-                 pattern="${build.ivy.spark.lib.dir}/${ivy.artifact.retrieve.pattern}" conf="spark"/>
+                 pattern="${build.ivy.spark.lib.dir}/[artifact]-[revision](-[classifier]).[ext]" conf="spark"/>
        <ivy:cachepath pathid="compile.classpath" conf="compile"/>
      </target>
 

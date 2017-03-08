@@ -53,8 +53,7 @@ public class SortConverter implements RDDConverter<Tuple, Tuple, POSort> {
         JavaPairRDD<Tuple, Object> r = new JavaPairRDD<Tuple, Object>(rddPair,
                 SparkUtil.getManifest(Tuple.class),
                 SparkUtil.getManifest(Object.class));
-
-
+        
         JavaPairRDD<Tuple, Object> sorted = r.sortByKey(
                 sortOperator.getMComparator(), true, parallelism);
         JavaRDD<Tuple> mapped = sorted.mapPartitions(TO_VALUE_FUNCTION);

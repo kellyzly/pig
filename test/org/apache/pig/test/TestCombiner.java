@@ -189,8 +189,8 @@ public class TestCombiner {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PrintStream ps = new PrintStream(baos);
         pigServer.explain("c", ps);
-        checkCombinerUsed(pigServer, "c", true);
-
+        assertTrue(baos.toString().matches("(?si).*combine plan.*"));
+        
         Iterator<Tuple> it = pigServer.openIterator("c");
         Tuple t = it.next();
         assertEquals(512000L, t.get(0));
@@ -239,7 +239,7 @@ public class TestCombiner {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PrintStream ps = new PrintStream(baos);
         pigServer.explain("c", ps);
-        checkCombinerUsed(pigServer, "c", true);
+        assertTrue(baos.toString().matches("(?si).*combine plan.*"));
 
         HashMap<String, Object[]> results = new HashMap<String, Object[]>();
         results.put("pig1", new Object[] { "pig1", 3L, 57L, 5.2, 75L, 9.4, 3L, 3L, 57L });
@@ -406,12 +406,12 @@ public class TestCombiner {
         pigServer.shutdown();
     }
 
-    private void checkCombinerUsed(PigServer pigServer, String variable, boolean combineExpected)
+    private void checkCombinerUsed(PigServer pigServer, String alias, boolean combineExpected)
             throws IOException {
         // make sure there is a combine plan in the explain output
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PrintStream ps = new PrintStream(baos);
-        pigServer.explain(variable, ps);
+        pigServer.explain(alias, ps);
         boolean combinerFound;
         if (pigServer.getPigContext().getExecType().name().equalsIgnoreCase("spark")) {
             combinerFound = baos.toString().contains("Reduce By");
