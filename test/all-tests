@@ -1,1 +1,6 @@
-**/Test*.java
+**/TestCommit.java
+**/TestCustomPartitioner.java
+**/TestEvalPipelineLocal.java
+**/TestGrunt.java
+**/TestInputOutputFileValidator.java
+**/TestLimitSchemaStore.java
