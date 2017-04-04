@@ -248,7 +248,7 @@ public class CombinerOptimizer extends SparkOpPlanVisitor {
                     phyPlan.replace(rearrange, combinerLocalRearrange);
 
                     // Create a reduceBy operator.
-                    POReduceBySpark reduceOperator = new POReduceBySpark(cfe.getOperatorKey(), cfe
+                    POReduceBySpark reduceOperator = new POReduceBySpark(cfe.getOperatorKey(), combinerLocalRearrange
                             .getRequestedParallelism(),
                             cfe.getInputPlans(), cfe.getToBeFlattened(), combinePack, newRearrange);
                     reduceOperator.setCustomPartitioner(glr.getCustomPartitioner());
