@@ -41,8 +41,6 @@ import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MRConfigurat
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PhyPlanSetter;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.UDFFinishVisitor;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.PhysicalOperator;
-import org.apache.pig.backend.hadoop.executionengine.physicalLayer.expressionOperators.ConstantExpression;
-import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhyPlanVisitor;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.plans.PhysicalPlan;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POBroadcastSpark;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POMergeJoin;
@@ -51,17 +49,14 @@ import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOpe
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.util.PlanHelper;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.FRJoinConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.converter.RDDConverter;
-import org.apache.pig.backend.hadoop.executionengine.spark.converter.SkewedJoinConverter;
 import org.apache.pig.backend.hadoop.executionengine.spark.operator.NativeSparkOperator;
 import org.apache.pig.backend.hadoop.executionengine.spark.operator.POJoinGroupSpark;
-import org.apache.pig.backend.hadoop.executionengine.spark.operator.POPoissonSampleSpark;
 import org.apache.pig.backend.hadoop.executionengine.spark.plan.SparkOpPlanVisitor;
 import org.apache.pig.backend.hadoop.executionengine.spark.plan.SparkOperPlan;
 import org.apache.pig.backend.hadoop.executionengine.spark.plan.SparkOperator;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.impl.PigContext;
 import org.apache.pig.impl.plan.DependencyOrderWalker;
-import org.apache.pig.impl.plan.DepthFirstWalker;
 import org.apache.pig.impl.plan.OperatorKey;
 import org.apache.pig.impl.plan.VisitorException;
 import org.apache.pig.newplan.logical.relational.LOJoin;
@@ -110,14 +105,8 @@ public class JobGraphBuilder extends SparkOpPlanVisitor {
             setReplicationForMergeJoin(sparkOp.physicalPlan);
             sparkOperToRDD(sparkOp);
             finishUDFs(sparkOp.physicalPlan);
-        } catch (InterruptedException e) {
-            throw new RuntimeException("fail to get the rdds of this spark operator: ", e);
-        } catch (JobCreationException e) {
-            throw new RuntimeException("fail to get the rdds of this spark operator: ", e);
-        } catch (ExecException e) {
-            throw new RuntimeException("fail to get the rdds of this spark operator: ", e);
-        } catch (IOException e) {
-            throw new RuntimeException("fail to get the rdds of this spark operator: ", e);
+        } catch (Exception e) {
+            throw new VisitorException("fail to get the rdds of this spark operator: ", e);
         }
     }
 
@@ -265,14 +254,14 @@ public class JobGraphBuilder extends SparkOpPlanVisitor {
 
         if (physicalOperator instanceof POSplit) {
             List<PhysicalPlan> successorPlans = ((POSplit) physicalOperator).getPlans();
-            for (PhysicalPlan successPlan : successorPlans) {
-                List<PhysicalOperator> leavesOfSuccessPlan = successPlan.getLeaves();
+            for (PhysicalPlan succcessorPlan : successorPlans) {
+                List<PhysicalOperator> leavesOfSuccessPlan = succcessorPlan.getLeaves();
                 if (leavesOfSuccessPlan.size() != 1) {
-                    LOG.error("the size of leaves of SuccessPlan should be 1");
-                    break;
+                    LOG.error("the size of leaves of successorPlan should be 1");
+                    throw new RuntimeException("the size of the leaves of successorPlan should be 1");
                 }
                 PhysicalOperator leafOfSuccessPlan = leavesOfSuccessPlan.get(0);
-                physicalToRDD(sparkOperator, successPlan, leafOfSuccessPlan, operatorKeysOfAllPreds);
+                physicalToRDD(sparkOperator, succcessorPlan, leafOfSuccessPlan, operatorKeysOfAllPreds);
             }
         } else {
             RDDConverter converter = convertMap.get(physicalOperator.getClass());

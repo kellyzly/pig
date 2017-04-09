@@ -28,6 +28,7 @@ import java.util.HashMap;
 import com.google.common.collect.Maps;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.pig.backend.hadoop.executionengine.spark.PigSparkContext;
 import org.apache.pig.data.DataBag;
 import org.apache.pig.impl.builtin.PartitionSkewedKeys;
 import org.apache.pig.impl.util.Pair;
@@ -87,7 +88,7 @@ public class SkewedJoinConverter implements
         Broadcast<List<Tuple>> keyDist = SparkUtil.getBroadcastedVars().get(skewedJoinPartitionFile);
 
         // if no keyDist,  we need  defaultParallelism
-        Integer defaultParallelism = SparkUtil.getParallelism(predecessors, poSkewedJoin);
+        Integer defaultParallelism = PigSparkContext.get().getParallelism(predecessors, poSkewedJoin);
 
         // with partition id
         SkewPartitionIndexKeyFunction skewFun = new SkewPartitionIndexKeyFunction(this, keyDist, defaultParallelism);
