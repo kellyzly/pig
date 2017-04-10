@@ -130,7 +130,6 @@ import org.apache.pig.tools.pigstats.PigStats;
 import org.apache.pig.tools.pigstats.spark.SparkCounters;
 import org.apache.pig.tools.pigstats.spark.SparkPigStats;
 import org.apache.pig.tools.pigstats.spark.SparkPigStatusReporter;
-import org.apache.pig.tools.pigstats.spark.SparkScriptState;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.scheduler.JobLogger;
@@ -350,7 +349,7 @@ public class SparkLauncher extends Launcher {
         }
     }
 
-    private void addFilesToSparkJob(SparkOperator sparkPlan) throws IOException {
+    private void addFilesToSparkJob(SparkOperPlan sparkPlan) throws IOException {
         LOG.info("Add files Spark Job");
         String shipFiles = pigContext.getProperties().getProperty(
                 "pig.streaming.ship.files");

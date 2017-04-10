@@ -85,7 +85,7 @@ public class SkewedJoinConverter implements
         RDD<Tuple> rdd1 = predecessors.get(0);
         RDD<Tuple> rdd2 = predecessors.get(1);
 
-        Broadcast<List<Tuple>> keyDist = SparkUtil.getBroadcastedVars().get(skewedJoinPartitionFile);
+        Broadcast<List<Tuple>> keyDist = PigSparkContext.get().getBroadcastedVars().get(skewedJoinPartitionFile);
 
         // if no keyDist,  we need  defaultParallelism
         Integer defaultParallelism = PigSparkContext.get().getParallelism(predecessors, poSkewedJoin);
