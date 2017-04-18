@@ -557,6 +557,8 @@ public class SparkLauncher extends Launcher {
 
             sparkConf.setMaster(master);
             sparkConf.setAppName(pigCtxtProperties.getProperty(PigContext.JOB_NAME,"pig"));
+            sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
+
             if (sparkHome != null && !sparkHome.isEmpty()) {
                 sparkConf.setSparkHome(sparkHome);
             } else {

@@ -394,8 +394,10 @@
       conf="hadoop2->master" />
     <dependency org="org.iq80.snappy" name="snappy" rev="${snappy.version}"
       conf="test->master" />
-    <dependency org="com.esotericsoftware.kryo" name="kryo" rev="${kryo.version}"
-      conf="compile->master" />
+    <!--<dependency org="com.esotericsoftware.kryo" name="kryo" rev="${kryo.version}"-->
+      <!--conf="compile->master" />-->
+      <dependency org="com.esotericsoftware" name="kryo" rev="${kryo.version}" conf="compile->master" />
+      <dependency org="com.esotericsoftware" name="minlog" rev="1.3" conf="compile->master" />
     <dependency org="org.apache.commons" name="commons-lang3" rev="${commons-lang3.version}"
       conf="compile->master" />
 

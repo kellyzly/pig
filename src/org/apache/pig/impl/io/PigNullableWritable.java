@@ -20,6 +20,7 @@ package org.apache.pig.impl.io;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.io.Serializable;
 
 import org.apache.hadoop.io.WritableComparable;
 import org.apache.pig.backend.executionengine.ExecException;
@@ -40,7 +41,7 @@ import org.apache.pig.data.Tuple;
 //Put in to make the compiler not complain about WritableComparable
 //being a generic type.
 @SuppressWarnings("unchecked")
-public abstract class PigNullableWritable implements WritableComparable, Cloneable {
+public abstract class PigNullableWritable implements WritableComparable, Cloneable,Serializable {
 
     /**
      * indices in multiquery optimized maps
@@ -94,7 +95,10 @@ public abstract class PigNullableWritable implements WritableComparable, Cloneab
             else if ((mIndex & idxSpace) > (w.mIndex & idxSpace)) return 1;
         }
 
-        if (!mNull && !w.mNull) {
+//        if ((this == null || o == null)) {
+//            return 1;
+//        }
+            if (!mNull && !w.mNull) {
             int result = mValue.compareTo(w.mValue);
 
             // If any of the field inside tuple is null, then we do not merge keys
