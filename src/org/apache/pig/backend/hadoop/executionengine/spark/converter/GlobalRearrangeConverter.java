@@ -275,7 +275,7 @@ public class GlobalRearrangeConverter implements
                 } else {
                     key = t.get(1);
                 }
-
+//TODO:  as JoinGroupOptimizerSpark will package LR,GLR,PKG as POJoinGroupSpark, GlobalRearrangeConverter.java will be deleted later
                 Tuple2<IndexedKey, Tuple> out = new Tuple2<IndexedKey, Tuple>(
                         new IndexedKey((Byte) t.get(0), key),
                         (Tuple) t.get(2));

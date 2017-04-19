@@ -87,6 +87,9 @@ public abstract class PigNullableWritable implements WritableComparable, Cloneab
      */
     @Override
     public int compareTo(Object o) {
+        if( !(o instanceof  PigNullableWritable)){
+            return 1;
+        }
         PigNullableWritable w = (PigNullableWritable)o;
 
         if ((mIndex & mqFlag) != 0) { // this is a multi-query index

@@ -47,13 +47,13 @@ public class SecondaryKeySortUtil {
             .getLog(SecondaryKeySortUtil.class);
 
     public static RDD<Tuple> handleSecondarySort(
-            RDD<Tuple2<IndexedKey, Tuple>> rdd, POPackage pkgOp) {
-        JavaPairRDD<IndexedKey, Tuple> pairRDD = JavaPairRDD.fromRDD(rdd, SparkUtil.getManifest(IndexedKey.class),
+            RDD<Tuple2<PigNullableWritable, Tuple>> rdd, POPackage pkgOp) {
+        JavaPairRDD<PigNullableWritable, Tuple> pairRDD = JavaPairRDD.fromRDD(rdd, SparkUtil.getManifest(PigNullableWritable.class),
                 SparkUtil.getManifest(Tuple.class));
 
         int partitionNums = pairRDD.partitions().size();
         //repartition to group tuples with same indexedkey to same partition
-        JavaPairRDD<IndexedKey, Tuple> sorted = pairRDD.repartitionAndSortWithinPartitions(
+        JavaPairRDD<PigNullableWritable, Tuple> sorted = pairRDD.repartitionAndSortWithinPartitions(
                 new IndexedKeyPartitioner(partitionNums));
         //Package tuples with same indexedkey as the result: (key,(val1,val2,val3,...))
         return sorted.mapPartitions(new AccumulateByKey(pkgOp), true).rdd();
@@ -61,7 +61,7 @@ public class SecondaryKeySortUtil {
 
     //Package tuples with same indexedkey as the result: (key,(val1,val2,val3,...))
     //Send (key,Iterator) to POPackage, use POPackage#getNextTuple to get the result
-    private static class AccumulateByKey implements FlatMapFunction<Iterator<Tuple2<IndexedKey, Tuple>>, Tuple>,
+    private static class AccumulateByKey implements FlatMapFunction<Iterator<Tuple2<PigNullableWritable, Tuple>>, Tuple>,
             Serializable {
         private POPackage pkgOp;
 
@@ -70,7 +70,7 @@ public class SecondaryKeySortUtil {
         }
 
         @Override
-        public Iterable<Tuple> call(final Iterator<Tuple2<IndexedKey, Tuple>> it) throws Exception {
+        public Iterable<Tuple> call(final Iterator<Tuple2<PigNullableWritable, Tuple>> it) throws Exception {
             return new Iterable<Tuple>() {
                 Object curKey = null;
                 ArrayList curValues = new ArrayList();
@@ -87,11 +87,12 @@ public class SecondaryKeySortUtil {
                         @Override
                         public Tuple next() {
                             while (it.hasNext()) {
-                                Tuple2<IndexedKey, Tuple> t = it.next();
+                                Tuple2<PigNullableWritable, Tuple> t = it.next();
                                 //key changes, restruct the last tuple by curKey, curValues and return
                                 Object tMainKey = null;
                                 try {
-                                    tMainKey = ((Tuple) (t._1()).getKey()).get(0);
+                                    Object compoundKey = t._1().getValueAsPigType();
+                                    tMainKey = ((Tuple) compoundKey).get(0);
                                     if (curKey != null && !curKey.equals(tMainKey)) {
                                         Tuple result = restructTuple(curKey, new ArrayList(curValues));
                                         curValues.clear();
@@ -180,17 +181,16 @@ public class SecondaryKeySortUtil {
         }
 
         @Override
-        public int getPartition(Object obj) {
-            IndexedKey indexedKey = (IndexedKey) obj;
-            Tuple key = (Tuple) indexedKey.getKey();
-
-            int hashCode = 0;
+        public int getPartition(Object obj){
+            Object compoundKey = ((PigNullableWritable) obj).getValueAsPigType();
             try {
-                hashCode = Objects.hashCode(key.get(0));
+                Object mainKey = ((Tuple) compoundKey).get(0);
+                int hashCode = 0;
+                hashCode = Objects.hashCode(mainKey);
+                return Math.abs(hashCode) % partition;
             } catch (ExecException e) {
                 throw new RuntimeException("IndexedKeyPartitioner#getPartition: ", e);
             }
-            return Math.abs(hashCode) % partition;
         }
 
         @Override

@@ -28,6 +28,7 @@ import scala.runtime.AbstractFunction2;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.pig.backend.executionengine.ExecException;
+import org.apache.pig.backend.hadoop.HDataType;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.POStatus;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.Result;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLocalRearrange;
@@ -39,6 +40,7 @@ import org.apache.pig.data.DefaultBagFactory;
 import org.apache.pig.data.DefaultTuple;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.data.TupleFactory;
+import org.apache.pig.impl.io.PigNullableWritable;
 import org.apache.spark.HashPartitioner;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
@@ -58,18 +60,18 @@ public class ReduceByConverter implements RDDConverter<Tuple, Tuple, POReduceByS
         int parallelism = SparkPigContext.get().getParallelism(predecessors, op);
 
         RDD<Tuple> rdd = predecessors.get(0);
-        RDD<Tuple2<IndexedKey, Tuple>> rddPair
+        RDD<Tuple2<PigNullableWritable, Tuple>> rddPair
                 = rdd.map(new LocalRearrangeFunction(op.getLROp(), op.isUseSecondaryKey(), op.getSecondarySortOrder())
-                , SparkUtil.<IndexedKey, Tuple>getTuple2Manifest());
+                , SparkUtil.<PigNullableWritable, Tuple>getTuple2Manifest());
         if (op.isUseSecondaryKey()) {
             return SecondaryKeySortUtil.handleSecondarySort(rddPair, op.getPKGOp());
         } else {
-            PairRDDFunctions<IndexedKey, Tuple> pairRDDFunctions
+            PairRDDFunctions<PigNullableWritable, Tuple> pairRDDFunctions
                     = new PairRDDFunctions<>(rddPair,
-                    SparkUtil.getManifest(IndexedKey.class),
+                    SparkUtil.getManifest(PigNullableWritable.class),
                     SparkUtil.getManifest(Tuple.class), null);
 
-            RDD<Tuple2<IndexedKey, Tuple>> tupleRDD = pairRDDFunctions.reduceByKey(
+            RDD<Tuple2<PigNullableWritable, Tuple>> tupleRDD = pairRDDFunctions.reduceByKey(
                     SparkUtil.getPartitioner(op.getCustomPartitioner(), parallelism),
                     new MergeValuesFunction(op));
             LOG.debug("Custom Partitioner and parallelims used : " + op.getCustomPartitioner() + ", " + parallelism);
@@ -78,7 +80,7 @@ public class ReduceByConverter implements RDDConverter<Tuple, Tuple, POReduceByS
         }
     }
 
-    private JavaRDD<Tuple2<IndexedKey, Tuple>> handleSecondarySort(
+    private JavaRDD<Tuple2<PigNullableWritable, Tuple>> handleSecondarySort(
             RDD<Tuple> rdd, POReduceBySpark op, int parallelism) {
 
         RDD<Tuple2<Tuple, Object>> rddPair = rdd.map(new ToKeyNullValueFunction(),
@@ -93,7 +95,7 @@ public class ReduceByConverter implements RDDConverter<Tuple, Tuple, POReduceByS
                 new HashPartitioner(parallelism),
                 new PigSecondaryKeyComparatorSpark(op.getSecondarySortOrder()));
         JavaRDD<Tuple> jrdd = sorted.keys();
-        JavaRDD<Tuple2<IndexedKey, Tuple>> jrddPair = jrdd.map(new ToKeyValueFunction(op));
+        JavaRDD<Tuple2<PigNullableWritable, Tuple>> jrddPair = jrdd.map(new ToKeyValueFunction(op));
         return jrddPair;
     }
 
@@ -121,7 +123,7 @@ public class ReduceByConverter implements RDDConverter<Tuple, Tuple, POReduceByS
      * (index, key, value) into Tuple2<key, Tuple(key, value)>
      */
     private static class ToKeyValueFunction implements
-            Function<Tuple, Tuple2<IndexedKey, Tuple>>, Serializable {
+            Function<Tuple, Tuple2<PigNullableWritable, Tuple>>, Serializable {
 
         private POReduceBySpark poReduce = null;
 
@@ -130,7 +132,7 @@ public class ReduceByConverter implements RDDConverter<Tuple, Tuple, POReduceByS
         }
 
         @Override
-        public Tuple2<IndexedKey, Tuple> call(Tuple t) {
+        public Tuple2<PigNullableWritable, Tuple> call(Tuple t) {
             try {
                 if (LOG.isDebugEnabled()) {
                     LOG.debug("ToKeyValueFunction in " + t);
@@ -147,7 +149,11 @@ public class ReduceByConverter implements RDDConverter<Tuple, Tuple, POReduceByS
                 tupleWithKey.append(key);
                 tupleWithKey.append(t.get(2));
 
-                Tuple2<IndexedKey, Tuple> out = new Tuple2<IndexedKey, Tuple>(new IndexedKey((Byte) t.get(0), key), tupleWithKey);
+                //TODO
+                //verify poReduce.getLROp().getKeyType() or poReduce.getLROp().getMainKeyType()
+                PigNullableWritable indexedKey = HDataType.getWritableComparableTypes(key, poReduce.getLROp().getKeyType());
+                indexedKey.setIndex((Byte) t.get(0));
+                Tuple2<PigNullableWritable, Tuple> out = new Tuple2<PigNullableWritable, Tuple>(indexedKey, tupleWithKey);
                 if (LOG.isDebugEnabled()) {
                     LOG.debug("ToKeyValueFunction out " + out);
                 }
@@ -223,7 +229,7 @@ public class ReduceByConverter implements RDDConverter<Tuple, Tuple, POReduceByS
     /**
      * This function transforms the Tuple to ensure it is packaged as per requirements of the Operator's packager.
      */
-    private static final class ToTupleFunction extends AbstractFunction1<Tuple2<IndexedKey, Tuple>, Tuple>
+    private static final class ToTupleFunction extends AbstractFunction1<Tuple2<PigNullableWritable, Tuple>, Tuple>
             implements Serializable {
 
         private final POReduceBySpark poReduce;
@@ -233,7 +239,7 @@ public class ReduceByConverter implements RDDConverter<Tuple, Tuple, POReduceByS
         }
 
         @Override
-        public Tuple apply(Tuple2<IndexedKey, Tuple> v1) {
+        public Tuple apply(Tuple2<PigNullableWritable, Tuple> v1) {
             LOG.debug("ToTupleFunction in : " + v1);
             DataBag bag = DefaultBagFactory.getInstance().newDefaultBag();
             Tuple t = new DefaultTuple();
@@ -258,23 +264,23 @@ public class ReduceByConverter implements RDDConverter<Tuple, Tuple, POReduceByS
      * (index, key, value) into Tuple2<key, Tuple(key, value)>
      */
     private static class LocalRearrangeFunction extends
-            AbstractFunction1<Tuple, Tuple2<IndexedKey, Tuple>> implements Serializable {
+            AbstractFunction1<Tuple, Tuple2<PigNullableWritable, Tuple>> implements Serializable {
 
         private final POLocalRearrange lra;
 
-        private boolean useSecondaryKey;
-        private boolean[] secondarySortOrder;
+//        private boolean useSecondaryKey;
+//        private boolean[] secondarySortOrder;
 
         public LocalRearrangeFunction(POLocalRearrange lra, boolean useSecondaryKey, boolean[] secondarySortOrder) {
-            if( useSecondaryKey ) {
-                this.useSecondaryKey = useSecondaryKey;
-                this.secondarySortOrder = secondarySortOrder;
-            }
+//            if( useSecondaryKey ) {
+//                this.useSecondaryKey = useSecondaryKey;
+//                this.secondarySortOrder = secondarySortOrder;
+//            }
             this.lra = lra;
         }
 
         @Override
-        public Tuple2<IndexedKey, Tuple> apply(Tuple t) {
+        public Tuple2<PigNullableWritable, Tuple> apply(Tuple t) {
             if (LOG.isDebugEnabled()) {
                 LOG.debug("LocalRearrangeFunction in " + t);
             }
@@ -295,15 +301,16 @@ public class ReduceByConverter implements RDDConverter<Tuple, Tuple, POReduceByS
                         // (index, key, Tuple(key, value))
                         Tuple resultTuple = (Tuple) result.result;
                         Object key = resultTuple.get(1);
-                        IndexedKey indexedKey = new IndexedKey((Byte) resultTuple.get(0), key);
-                        if( useSecondaryKey) {
-                            indexedKey.setUseSecondaryKey(useSecondaryKey);
-                            indexedKey.setSecondarySortOrder(secondarySortOrder);
-                        }
+                        PigNullableWritable indexedKey = HDataType.getWritableComparableTypes(key, lra.getKeyType());
+                        indexedKey.setIndex((Byte) resultTuple.get(0));
+//                        if( useSecondaryKey) {
+//                            indexedKey.setUseSecondaryKey(useSecondaryKey);
+//                            indexedKey.setSecondarySortOrder(secondarySortOrder);
+//                        }
                         Tuple outValue =  TupleFactory.getInstance().newTuple();
                         outValue.append(key);
                         outValue.append(resultTuple.get(2));
-                        Tuple2<IndexedKey, Tuple> out = new Tuple2<IndexedKey, Tuple>(indexedKey,
+                        Tuple2<PigNullableWritable, Tuple> out = new Tuple2<PigNullableWritable, Tuple>(indexedKey,
                                outValue);
                         if (LOG.isDebugEnabled()) {
                             LOG.debug("LocalRearrangeFunction out " + out);

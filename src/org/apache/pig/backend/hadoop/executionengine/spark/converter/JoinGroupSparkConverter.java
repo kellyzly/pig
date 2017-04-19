@@ -26,6 +26,7 @@ import java.util.List;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.pig.backend.executionengine.ExecException;
+import org.apache.pig.backend.hadoop.HDataType;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.POStatus;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.Result;
 import org.apache.pig.backend.hadoop.executionengine.physicalLayer.relationalOperators.POLocalRearrange;
@@ -59,13 +60,15 @@ public class JoinGroupSparkConverter implements RDDConverter<Tuple, Tuple, POJoi
         POGlobalRearrangeSpark glaOp = op.getGROp();
         POPackage pkgOp = op.getPkgOp();
         int parallelism = SparkPigContext.get().getParallelism(predecessors, glaOp);
-        List<RDD<Tuple2<IndexedKey, Tuple>>> rddAfterLRA = new ArrayList<RDD<Tuple2<IndexedKey, Tuple>>>();
+        List<RDD<Tuple2<PigNullableWritable, Tuple>>> rddAfterLRA = new ArrayList<RDD<Tuple2<PigNullableWritable,
+                Tuple>>>();
+
         boolean useSecondaryKey = glaOp.isUseSecondaryKey();
 
         for (int i = 0; i < predecessors.size(); i++) {
             RDD<Tuple> rdd = predecessors.get(i);
             rddAfterLRA.add(rdd.map(new LocalRearrangeFunction(lraOps.get(i), glaOp),
-                    SparkUtil.<IndexedKey, Tuple>getTuple2Manifest()));
+                    SparkUtil.<PigNullableWritable, Tuple>getTuple2Manifest()));
         }
         if (rddAfterLRA.size() == 1 && useSecondaryKey) {
             return SecondaryKeySortUtil.handleSecondarySort(rddAfterLRA.get(0), pkgOp);
@@ -77,14 +80,14 @@ public class JoinGroupSparkConverter implements RDDConverter<Tuple, Tuple, POJoi
                     SparkUtil.getPartitioner(glaOp.getCustomPartitioner(), parallelism),
                     SparkUtil.getManifest(Object.class));
 
-            RDD<Tuple2<IndexedKey, Seq<Seq<Tuple>>>> rdd =
-                    (RDD<Tuple2<IndexedKey, Seq<Seq<Tuple>>>>) (Object) coGroupedRDD;
+            RDD<Tuple2<PigNullableWritable, Seq<Seq<Tuple>>>> rdd =
+                    (RDD<Tuple2<PigNullableWritable, Seq<Seq<Tuple>>>>) (Object) coGroupedRDD;
             return rdd.toJavaRDD().map(new GroupPkgFunction(pkgOp)).rdd();
         }
     }
 
     private static class LocalRearrangeFunction extends
-            AbstractFunction1<Tuple, Tuple2<IndexedKey, Tuple>> implements Serializable {
+            AbstractFunction1<Tuple, Tuple2<PigNullableWritable, Tuple>> implements Serializable {
 
         private final POLocalRearrange lra;
 
@@ -100,7 +103,7 @@ public class JoinGroupSparkConverter implements RDDConverter<Tuple, Tuple, POJoi
         }
 
         @Override
-        public Tuple2<IndexedKey, Tuple> apply(Tuple t) {
+        public Tuple2<PigNullableWritable, Tuple> apply(Tuple t) {
             if (LOG.isDebugEnabled()) {
                 LOG.debug("LocalRearrangeFunction in " + t);
             }
@@ -121,13 +124,9 @@ public class JoinGroupSparkConverter implements RDDConverter<Tuple, Tuple, POJoi
                         // (index, key, value without keys)
                         Tuple resultTuple = (Tuple) result.result;
                         Object key = resultTuple.get(1);
-                        IndexedKey indexedKey = new IndexedKey((Byte) resultTuple.get(0), key);
-                        if( useSecondaryKey) {
-                            indexedKey.setUseSecondaryKey(useSecondaryKey);
-                            indexedKey.setSecondarySortOrder(secondarySortOrder);
-                        }
-                        Tuple2<IndexedKey, Tuple> out = new Tuple2<IndexedKey, Tuple>(indexedKey,
-                                (Tuple) resultTuple.get(2));
+                        PigNullableWritable indexedKey = HDataType.getWritableComparableTypes(key, lra.getKeyType());
+                        indexedKey.setIndex((Byte) resultTuple.get(0));
+                        Tuple2<PigNullableWritable, Tuple> out = new Tuple2<PigNullableWritable, Tuple>(indexedKey,(Tuple) resultTuple.get(2));
                         if (LOG.isDebugEnabled()) {
                             LOG.debug("LocalRearrangeFunction out " + out);
                         }
@@ -150,7 +149,7 @@ public class JoinGroupSparkConverter implements RDDConverter<Tuple, Tuple, POJoi
      * then call PoPackage#getNextTuple to get the result
      */
     private static class GroupPkgFunction implements
-            Function<Tuple2<IndexedKey, Seq<Seq<Tuple>>>, Tuple>, Serializable {
+            Function<Tuple2<PigNullableWritable, Seq<Seq<Tuple>>>, Tuple>, Serializable {
 
         private final POPackage pkgOp;
 
@@ -159,19 +158,13 @@ public class JoinGroupSparkConverter implements RDDConverter<Tuple, Tuple, POJoi
         }
 
         @Override
-        public Tuple call(final Tuple2<IndexedKey, Seq<Seq<Tuple>>> input) {
+        public Tuple call(final Tuple2<PigNullableWritable, Seq<Seq<Tuple>>> input) {
             try {
                 if (LOG.isDebugEnabled()) {
                     LOG.debug("GroupPkgFunction in " + input);
                 }
 
-                final PigNullableWritable key = new PigNullableWritable() {
-
-                    public Object getValueAsPigType() {
-                        IndexedKey keyTuple = input._1();
-                        return keyTuple.getKey();
-                    }
-                };
+                final PigNullableWritable key = input._1();
                 Object obj = input._2();
                 // XXX this is a hack for Spark 1.1.0: the type is an Array, not Seq
                 Seq<Tuple>[] bags = (Seq<Tuple>[]) obj;
