@@ -824,6 +824,10 @@ public class POForEach extends PhysicalOperator {
         }
     }
 
+    public PhysicalOperator[] getPlanLeafOps() {
+        return planLeafOps;
+    }
+
     public void setMapSideOnly(boolean mapSideOnly) {
         this.mapSideOnly = mapSideOnly;
     }
