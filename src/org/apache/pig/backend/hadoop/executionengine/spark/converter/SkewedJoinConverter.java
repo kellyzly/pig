@@ -32,6 +32,7 @@ import org.apache.pig.backend.hadoop.HDataType;
 import org.apache.pig.backend.hadoop.executionengine.spark.SparkPigContext;
 import org.apache.pig.data.DataBag;
 import org.apache.pig.impl.builtin.PartitionSkewedKeys;
+import org.apache.pig.impl.io.NullableTuple;
 import org.apache.pig.impl.io.PigNullableWritable;
 import org.apache.pig.impl.util.Pair;
 import org.apache.spark.Partitioner;
@@ -104,7 +105,8 @@ public class SkewedJoinConverter implements
                 SparkUtil.getManifest(Tuple.class));
 
         // with partition id
-        StreamPartitionIndexKeyFunction streamFun = new StreamPartitionIndexKeyFunction(this, keyDist, defaultParallelism);
+        StreamPartitionIndexKeyFunction streamFun = new StreamPartitionIndexKeyFunction(this, keyDist,
+                defaultParallelism);
         JavaRDD<Tuple2<PartitionIndexedKey, Tuple>> streamIdxKeyJavaRDD = rdd2.toJavaRDD().flatMap(streamFun);
 
         // Tuple2 RDD to Pair RDD
@@ -120,6 +122,7 @@ public class SkewedJoinConverter implements
 
         // return type is RDD<Tuple>, so take it from JavaRDD<Tuple>
         return result.rdd();
+    }
 
     private void createJoinPlans(MultiMap<PhysicalOperator, PhysicalPlan> inpPlans) throws PlanException {
 
@@ -286,6 +289,10 @@ public class SkewedJoinConverter implements
 
         private void setPartitionId(int pid) {
             partitionId = pid;
+        }
+
+        public PigNullableWritable getKey(){
+            return indexedKey;
         }
 
         @Override
@@ -492,7 +499,7 @@ public class SkewedJoinConverter implements
             }
 
             //else: by default using hashcode
-            Tuple key = (Tuple) ((PartitionIndexedKey) IdxKey).getKey();
+            Tuple key = (Tuple) ((PartitionIndexedKey) IdxKey).getKey().getValueAsPigType();
 
 
             int code = key.hashCode() % numPartitions;
