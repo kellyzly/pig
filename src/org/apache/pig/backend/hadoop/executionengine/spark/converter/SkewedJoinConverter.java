@@ -28,9 +28,11 @@ import java.util.HashMap;
 import com.google.common.collect.Maps;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.pig.backend.hadoop.HDataType;
 import org.apache.pig.backend.hadoop.executionengine.spark.SparkPigContext;
 import org.apache.pig.data.DataBag;
 import org.apache.pig.impl.builtin.PartitionSkewedKeys;
+import org.apache.pig.impl.io.PigNullableWritable;
 import org.apache.pig.impl.util.Pair;
 import org.apache.spark.Partitioner;
 import org.apache.spark.broadcast.Broadcast;
@@ -60,6 +62,7 @@ public class SkewedJoinConverter implements
         RDDConverter<Tuple, Tuple, POSkewedJoin>, Serializable {
 
     private static Log log = LogFactory.getLog(SkewedJoinConverter.class);
+    private static TupleFactory tf = TupleFactory.getInstance();
 
     private POLocalRearrange[] LRs;
     private POSkewedJoin poSkewedJoin;
@@ -117,7 +120,6 @@ public class SkewedJoinConverter implements
 
         // return type is RDD<Tuple>, so take it from JavaRDD<Tuple>
         return result.rdd();
-    }
 
     private void createJoinPlans(MultiMap<PhysicalOperator, PhysicalPlan> inpPlans) throws PlanException {
 
@@ -256,17 +258,25 @@ public class SkewedJoinConverter implements
         return reducerMap;
     }
 
-    private static class PartitionIndexedKey extends IndexedKey {
+    private static class PartitionIndexedKey {
         // for user defined partitioner
         int partitionId;
+        PigNullableWritable indexedKey;
 
         public PartitionIndexedKey(byte index, Object key) {
-            super(index, key);
-            partitionId = -1;
+            try {
+                Tuple tupleWithKey = tf.newTuple();
+                tupleWithKey.append(key);
+                indexedKey = HDataType.getWritableComparableTypes(key, DataType.TUPLE);
+                indexedKey.setIndex(index);
+                partitionId = -1;
+            } catch (ExecException e) {
+                throw new RuntimeException("PartitionIndexedKey throws exception ",e);
+            }
         }
 
         public PartitionIndexedKey(byte index, Object key, int pid) {
-            super(index, key);
+            this(index, key);
             partitionId = pid;
         }
 
@@ -281,9 +291,9 @@ public class SkewedJoinConverter implements
         @Override
         public String toString() {
             return "PartitionIndexedKey{" +
-                    "index=" + getIndex() +
+                    "index=" + indexedKey.getIndex() +
                     ", partitionId=" + getPartitionId() +
-                    ", key=" + getKey() +
+                    ", key=" + indexedKey.getValueAsPigType() +
                     '}';
         }
     }
