@@ -80,7 +80,7 @@ public class JoinGroupSparkConverter implements RDDConverter<Tuple, Tuple, POJoi
 
             RDD<Tuple2<IndexedKey, Seq<Seq<Tuple>>>> rdd =
                     (RDD<Tuple2<IndexedKey, Seq<Seq<Tuple>>>>) (Object) coGroupedRDD;
-            return rdd.toJavaRDD().map(new GroupByFunction(pkgOp)).rdd();
+            return rdd.toJavaRDD().map(new GroupByFunction()).map(new PackageFunction(pkgOp)).rdd();
         }
     }
 
@@ -146,18 +146,102 @@ public class JoinGroupSparkConverter implements RDDConverter<Tuple, Tuple, POJoi
 
     }
 
+  private static class PackageFunction extends
+      AbstractFunction1<Tuple, Tuple> implements Serializable {
+
+    private final POPackage physicalOperator;
+
+    public PackageFunction(POPackage physicalOperator) {
+      this.physicalOperator = physicalOperator;
+    }
+
+    @Override
+    public Tuple apply(final Tuple t) {
+      // (key, Seq<Tuple>:{(index, key, value without key)})
+      if (LOG.isDebugEnabled())
+        LOG.debug("PackageFunction in " + t);
+      Result result;
+      try {
+        PigNullableWritable key = new PigNullableWritable() {
+
+          public Object getValueAsPigType() {
+            try {
+              Object keyTuple = t.get(0);
+              return keyTuple;
+            } catch (ExecException e) {
+              throw new RuntimeException(e);
+            }
+          }
+        };
+        final Iterator<Tuple> bagIterator = (Iterator<Tuple>) t.get(1);
+        Iterator<NullableTuple> iterator = new Iterator<NullableTuple>() {
+          public boolean hasNext() {
+            return bagIterator.hasNext();
+          }
+
+          public NullableTuple next() {
+            try {
+              // we want the value and index only
+              Tuple next = bagIterator.next();
+              NullableTuple nullableTuple = new NullableTuple(
+                  (Tuple) next.get(1));
+              nullableTuple.setIndex(((Number) next.get(0))
+                  .byteValue());
+              if (LOG.isDebugEnabled())
+                LOG.debug("Setting index to " + next.get(0) +
+                    " for tuple " + (Tuple)next.get(1));
+              return nullableTuple;
+            } catch (ExecException e) {
+              throw new RuntimeException(e);
+            }
+          }
+
+          public void remove() {
+            throw new UnsupportedOperationException();
+          }
+        };
+        physicalOperator.setInputs(null);
+        physicalOperator.attachInput(key, iterator);
+        result = physicalOperator.getNextTuple();
+      } catch (ExecException e) {
+        throw new RuntimeException(
+            "Couldn't do Package on tuple: " + t, e);
+      }
+
+      if (result == null) {
+        throw new RuntimeException(
+            "Null response found for Package on tuple: " + t);
+      }
+      Tuple out;
+      switch (result.returnStatus) {
+        case POStatus.STATUS_OK:
+          // (key, {(value)...})
+          if (LOG.isDebugEnabled())
+            LOG.debug("PackageFunction out " + result.result);
+          out = (Tuple) result.result;
+          break;
+        case POStatus.STATUS_NULL:
+          out = null;
+          break;
+        default:
+          throw new RuntimeException(
+              "Unexpected response code from operator "
+                  + physicalOperator + " : " + result + " "
+                  + result.returnStatus);
+      }
+      if (LOG.isDebugEnabled())
+        LOG.debug("PackageFunction out " + out);
+      return out;
+    }
+  }
+
     /**
-     * Send cogroup output where each element is {key, bag[]} to PoPackage
-     * then call PoPackage#getNextTuple to get the result
+     * Send cogroup output where each element is {key, bag[]}
      */
     private static class GroupByFunction implements
             Function<Tuple2<IndexedKey, Seq<Seq<Tuple>>>, Tuple>, Serializable {
 
-        private final POPackage pkgOp;
 
-        public GroupByFunction(POPackage pkgOp) {
-            this.pkgOp = pkgOp;
-        }
 
         @Override
         public Tuple call(final Tuple2<IndexedKey, Seq<Seq<Tuple>>> input) {
