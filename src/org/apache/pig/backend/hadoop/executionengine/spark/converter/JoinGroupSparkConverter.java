@@ -35,6 +35,7 @@ import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
 import org.apache.pig.backend.hadoop.executionengine.spark.operator.POGlobalRearrangeSpark;
 import org.apache.pig.backend.hadoop.executionengine.spark.operator.POJoinGroupSpark;
 import org.apache.pig.data.Tuple;
+import org.apache.pig.data.TupleFactory;
 import org.apache.pig.impl.io.NullableTuple;
 import org.apache.pig.impl.io.PigNullableWritable;
 import org.apache.spark.api.java.function.Function;
@@ -50,7 +51,7 @@ import scala.runtime.AbstractFunction1;
 public class JoinGroupSparkConverter implements RDDConverter<Tuple, Tuple, POJoinGroupSpark> {
     private static final Log LOG = LogFactory
             .getLog(JoinGroupSparkConverter.class);
-
+  private static final TupleFactory tf = TupleFactory.getInstance();
     @Override
     public RDD<Tuple> convert(List<RDD<Tuple>> predecessors, POJoinGroupSpark op) throws IOException {
         SparkUtil.assertPredecessorSizeGreaterThan(predecessors,
@@ -79,7 +80,7 @@ public class JoinGroupSparkConverter implements RDDConverter<Tuple, Tuple, POJoi
 
             RDD<Tuple2<IndexedKey, Seq<Seq<Tuple>>>> rdd =
                     (RDD<Tuple2<IndexedKey, Seq<Seq<Tuple>>>>) (Object) coGroupedRDD;
-            return rdd.toJavaRDD().map(new GroupPkgFunction(pkgOp)).rdd();
+            return rdd.toJavaRDD().map(new GroupByFunction(pkgOp)).rdd();
         }
     }
 
@@ -149,12 +150,12 @@ public class JoinGroupSparkConverter implements RDDConverter<Tuple, Tuple, POJoi
      * Send cogroup output where each element is {key, bag[]} to PoPackage
      * then call PoPackage#getNextTuple to get the result
      */
-    private static class GroupPkgFunction implements
+    private static class GroupByFunction implements
             Function<Tuple2<IndexedKey, Seq<Seq<Tuple>>>, Tuple>, Serializable {
 
         private final POPackage pkgOp;
 
-        public GroupPkgFunction(POPackage pkgOp) {
+        public GroupByFunction(POPackage pkgOp) {
             this.pkgOp = pkgOp;
         }
 
@@ -193,34 +194,41 @@ public class JoinGroupSparkConverter implements RDDConverter<Tuple, Tuple, POJoi
                     });
                     ++i;
                 }
+              Tuple out = tf.newTuple(2);
+              out.set(0, key);
+              out.set(1, new IteratorUnion<NullableTuple>(tupleIterators.iterator()));
+              if (LOG.isDebugEnabled()) {
+                LOG.debug("GroupPkgFunction out " + out);
+              }
 
-
-                pkgOp.setInputs(null);
-                pkgOp.attachInput(key, new IteratorUnion<NullableTuple>(tupleIterators.iterator()));
-                Result result = pkgOp.getNextTuple();
-                if (result == null) {
-                    throw new RuntimeException(
-                            "Null response found for Package on key: " + key);
-                }
-                Tuple out;
-                switch (result.returnStatus) {
-                    case POStatus.STATUS_OK:
-                        // (key, {(value)...})
-                        out = (Tuple) result.result;
-                        break;
-                    case POStatus.STATUS_NULL:
-                        out = null;
-                        break;
-                    default:
-                        throw new RuntimeException(
-                                "Unexpected response code from operator "
-                                        + pkgOp + " : " + result + " "
-                                        + result.returnStatus);
-                }
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("GroupPkgFunction out " + out);
-                }
-                return out;
+              return out;
+//                pkgOp.setInputs(null);
+//                pkgOp.attachInput(key, new IteratorUnion<NullableTuple>(tupleIterators.iterator()));
+//
+//                Result result = pkgOp.getNextTuple();
+//                if (result == null) {
+//                    throw new RuntimeException(
+//                            "Null response found for Package on key: " + key);
+//                }
+//                Tuple out;
+//                switch (result.returnStatus) {
+//                    case POStatus.STATUS_OK:
+//                        // (key, {(value)...})
+//                        out = (Tuple) result.result;
+//                        break;
+//                    case POStatus.STATUS_NULL:
+//                        out = null;
+//                        break;
+//                    default:
+//                        throw new RuntimeException(
+//                                "Unexpected response code from operator "
+//                                        + pkgOp + " : " + result + " "
+//                                        + result.returnStatus);
+//                }
+//                if (LOG.isDebugEnabled()) {
+//                    LOG.debug("GroupPkgFunction out " + out);
+//                }
+//                return out;
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
